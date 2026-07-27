@@ -186,9 +186,12 @@ function PlotGeometry.setOwnerLabel(plotIndex: number, ownerName: string?): ()
 		return
 	end
 
-	local label = model:FindFirstChild("Sign")
-		and model.Sign:FindFirstChild("Label")
-		and model.Sign.Label:FindFirstChild("Owner")
+	-- Walked with FindFirstChild rather than dot access at every step. Dot access on a
+	-- runtime-built Model is both untypeable and a hard error if a child is ever missing,
+	-- where this path just does nothing.
+	local sign = model:FindFirstChild("Sign")
+	local billboard = sign and sign:FindFirstChild("Label")
+	local label = billboard and billboard:FindFirstChild("Owner")
 
 	if label and label:IsA("TextLabel") then
 		label.Text = if ownerName then `{ownerName}'s Empire` else UNCLAIMED_LABEL

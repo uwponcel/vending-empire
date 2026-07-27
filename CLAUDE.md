@@ -32,17 +32,65 @@ rokit install
 
 ## Validation
 
-Run all five before calling any change complete. CI runs the same set:
+**Every one of these must pass before any phase, feature, or bugfix is called complete.**
+Not a subset. CI runs the identical set, so a skipped gate locally just fails later:
 
 ```powershell
 ./scripts/sync-agent-docs.ps1 -Check
 stylua --check src/ tests/
 selene src/
+./scripts/analyze.ps1
 lune run tests/run
 rojo build --output build/vending-empire.rbxl
 ```
 
 `build/` is gitignored and Rojo will not create it, so `mkdir build` once per clone.
+
+### The type check is not optional
+
+`--!strict` at the top of a file does **nothing on its own**. Nothing reads it unless an
+analyzer runs, and `selene` is a linter, not a type checker. Before `scripts/analyze.ps1`
+existed the project had 22 type errors while every other gate reported green, including a
+real bug: `expect(next(t))` spreads two return values into a one-argument function.
+
+Never report work as complete on the strength of passing tests alone. Tests and the type
+checker catch different things, and a green suite says nothing about the types.
+
+Run `./scripts/analyze.ps1 -Refresh` after adding, moving, or renaming any file. The
+sourcemap goes stale and otherwise reports requires that work fine at runtime as unknown.
+
+### First-time setup
+
+`analyze.ps1` needs generated artifacts that are deliberately not committed:
+
+```powershell
+./scripts/lsp-setup.ps1
+```
+
+That fetches `globalTypes.None.d.luau` (Roblox API types, pinned to the same tag as the
+`luau-lsp` in `rokit.toml`), writes `sourcemap.json`, and runs `lune setup`. Versions are
+read from `rokit.toml` rather than hardcoded so the definitions cannot drift from the
+analyzer that reads them.
+
+The `None` variant is the game-script security level, chosen so that reaching for a
+plugin-only API is a type error instead of something that fails at runtime.
+
+### Editor setup
+
+Any editor's Luau language server needs the same three artifacts, so run
+`./scripts/lsp-setup.ps1` first, then point it at:
+
+- **Definitions**: `globalTypes.None.d.luau`
+- **Sourcemap**: `sourcemap.json`
+- **Platform**: `roblox`
+
+`lune setup` writes the `lune` alias into `.luaurc`, which is why that alias is committed
+while the typedefs it points at are not. If the editor reports
+`Unknown require: tests/@lune/process.lua`, the typedefs are missing or the alias version no
+longer matches the pinned `lune`: re-run `lsp-setup.ps1`.
+
+`src/server/Packages` is excluded from the analyzer, `stylua`, and `selene`. It is vendored
+code we may not modify, so its diagnostics would be permanent unfixable noise.
 
 ## Hard Conventions
 
@@ -86,6 +134,23 @@ pending = math.min(capacity, ratePerSecond * (os.time() - lastCollectAt))
 Use `os.time()` and never `tick()` or `os.clock()`, because those do not survive a rejoin.
 This is also what makes offline earnings work with no separate system, and the `capacity`
 clamp is what stops offline accrual from being an exploit.
+
+### Typing rules learned the hard way
+
+These all come from real errors the analyzer found:
+
+- A module that returns nothing **is not requireable** under strict analysis. Test suites
+  register on require and must still `return {}`.
+- Declare optional value types as optional. `{ [number]: Player }` compared against nil is a
+  type error, because the index type is `Player`, not `Player?`.
+- Never reach a runtime-built Instance by dot access. `model.Sign` is both untypeable and a
+  hard error if the child is missing. Walk it with `FindFirstChild` and nil-check.
+- Wrap multi-return calls in parentheses when passing them as one argument.
+  `expect(next(t))` passes **two** arguments; `expect((next(t)))` passes one.
+- Annotate function parameters. An unannotated parameter used in arithmetic is a type error,
+  not an implicit `any`.
+- Prefer a vendored module's exported generic type over `typeof(someCall(...))`. The latter
+  is arity-checked and breaks on incomplete upstream annotations.
 
 ### Style
 

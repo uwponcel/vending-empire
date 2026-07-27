@@ -22,3 +22,5 @@ describe("Version", function()
 		expect(Version.toString(Version.current)).toBe("0.1.0")
 	end)
 end)
+
+return {}

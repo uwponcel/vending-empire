@@ -32,7 +32,17 @@ local STORE_NAME = "PlayerData"
 ]]
 local USE_MOCK = false
 
-export type Profile = typeof(ProfileStore.New(STORE_NAME, {}):StartSessionAsync(""))
+--[[
+	ProfileStore exports a generic `Profile<T>`, so the saved shape is carried through and
+	`profile.Data` is typed as our schema rather than a free-for-all table.
+
+	The store handle itself stays `any`. ProfileStore's own annotation for
+	`StartSessionAsync` declares `params` as `{Steal: boolean?}` and non-optional, while its
+	documented API also accepts `Cancel` and allows omitting params entirely. Typing the
+	handle strictly would mean fighting an incomplete annotation in vendored code we are not
+	allowed to edit.
+]]
+export type Profile = ProfileStore.Profile<ProfileSchema.Data>
 
 local DataService = {}
 

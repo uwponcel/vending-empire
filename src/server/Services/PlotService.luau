@@ -23,8 +23,11 @@ local PlotLayout = require(Shared.Lib.PlotLayout)
 
 local PlotService = {}
 
-local ownerByPlot: { [number]: Player } = {}
-local plotByOwner: { [Player]: number } = {}
+-- Optional value types, because absence is the normal case for both of these and the
+-- lookups are compared against nil. Declaring them non-optional makes strict mode treat
+-- `ownerByPlot[i] == nil` as comparing two incompatible types.
+local ownerByPlot: { [number]: Player? } = {}
+local plotByOwner: { [Player]: number? } = {}
 
 function PlotService.getPlot(player: Player): number?
 	return plotByOwner[player]

@@ -201,3 +201,5 @@ describe("PlotLayout.gridHalfExtents", function()
 		expect(halfZ).toBeLessThan(1024)
 	end)
 end)
+
+return {}

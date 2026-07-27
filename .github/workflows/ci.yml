@@ -43,6 +43,18 @@ jobs:
       - name: Lint
         run: selene src/
 
+      # Roblox definitions, sourcemap, and Lune typedefs. None are committed, all are
+      # reproducible from the versions pinned in rokit.toml.
+      - name: Generate type-check artifacts
+        shell: pwsh
+        run: ./scripts/lsp-setup.ps1
+
+      # The gate that makes `--!strict` mean something. selene is a linter and does not
+      # type-check, so without this the strict annotations are decorative.
+      - name: Type check
+        shell: pwsh
+        run: ./scripts/analyze.ps1
+
       - name: Unit tests
         run: lune run tests/run
 

@@ -20,7 +20,11 @@ local state = {
 	failures = {} :: { { suite: string, name: string, message: string } },
 }
 
-local function color(name: string, text: string): string
+--- Narrowed to the colours stdio actually accepts, rather than `string`, so a typo is a
+--- type error instead of a runtime one.
+type Color = "black" | "blue" | "cyan" | "green" | "purple" | "red" | "white" | "yellow"
+
+local function color(name: Color, text: string): string
 	return stdio.color(name) .. text .. stdio.color("reset")
 end
 

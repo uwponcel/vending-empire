@@ -119,3 +119,5 @@ describe("Accrual.secondsUntilFull", function()
 		expect(Accrual.secondsUntilFull(RATE, CAPACITY, 0, 9999)).toBe(0)
 	end)
 end)
+
+return {}

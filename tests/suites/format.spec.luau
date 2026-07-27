@@ -96,3 +96,5 @@ describe("Format.duration", function()
 		expect(Format.duration(7200)).toBe("2h")
 	end)
 end)
+
+return {}

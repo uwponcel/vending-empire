@@ -147,3 +147,5 @@ describe("upgrade versus tier pacing", function()
 		expect(firstUpgrade).toBeLessThan(250)
 	end)
 end)
+
+return {}

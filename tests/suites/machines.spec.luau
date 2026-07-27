@@ -18,7 +18,7 @@ local describe = harness.describe
 local it = harness.it
 local expect = harness.expect
 
-local function paybackSeconds(machine): number
+local function paybackSeconds(machine: Machines.Machine): number
 	return machine.cost / machine.baseRate
 end
 
@@ -183,3 +183,5 @@ describe("Machines against the upgrade curve", function()
 		expect(maxOffline).toBeLessThan(activeEarningsPerHour)
 	end)
 end)
+
+return {}

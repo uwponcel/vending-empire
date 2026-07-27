@@ -29,7 +29,10 @@ describe("ProfileSchema.template", function()
 	it("starts with no machines, no receipts, and a neutral prestige", function()
 		local data = ProfileSchema.template(100, 3)
 		expect(#data.machines).toBe(0)
-		expect(next(data.receipts)).toBe(nil)
+		-- Extra parentheses are load-bearing. `next` returns two values, and without them
+		-- both get spread into `expect`, which then compares the wrong one. It happened to
+		-- pass here only because both were nil.
+		expect((next(data.receipts))).toBe(nil)
 		expect(data.prestige.count).toBe(0)
 		expect(data.prestige.multiplier).toBe(1)
 		expect(data.stats.totalEarned).toBe(0)
@@ -189,3 +192,5 @@ describe("ProfileSchema.migrate", function()
 		expect(data.machines[1].lastCollectAt).toBe(99)
 	end)
 end)
+
+return {}
