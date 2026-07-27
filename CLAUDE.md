@@ -119,6 +119,37 @@ Pass `path` to `search_game_tree`, for example `"Workspace"`. An unfiltered call
 roughly 150 services before reaching real content. With two Studio windows open, call
 `set_active_studio` first or writes land in the wrong place.
 
+### MCP cannot read service state
+
+`execute_luau` runs in its own script context, so `require` returns a **separate module
+instance** from the one the running server loaded. `DataService.get(player)` called through
+MCP returns nil even while the server log shows the profile loaded, because the module
+table it sees is a fresh empty one.
+
+Verify runtime state through things that actually cross contexts:
+
+- **Instances and attributes** are shared. This is why `PlotService` mirrors ownership onto
+  a `Model` attribute even though the server keeps the real table in memory.
+- **`print` output**, read back with `get_console_output`.
+- **The DataStore itself**, via `ProfileStore:GetAsync(key)`, which reads without taking a
+  session lock and so is safe against a live server.
+
+Prefer verifying through production code paths over adding debug hooks. Session playtime is
+accumulated by `DataService` on the way out, so a rejoin showing a non-zero playtime proves
+the whole save and load round-trip with no test-only code involved.
+
+### Geometry only exists during play
+
+`PlotGeometry.build()` runs on the server at runtime, so Edit mode shows a bare baseplate
+and the plot grid appears only in a play session. That is the cost of keeping layout in
+source control instead of authoring it in Studio.
+
+### Restarting rojo serve after a manifest change
+
+`rojo serve` reads `default.project.json` once at startup. Editing `$properties` or adding
+an instance to the manifest does nothing until the server is restarted and the plugin
+reconnects. Source file edits sync normally without a restart.
+
 ## DataStores
 
 `ProfileStore` is vendored rather than pulled through Wally. DataStore calls fail silently

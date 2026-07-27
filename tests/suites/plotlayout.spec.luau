@@ -192,11 +192,12 @@ describe("PlotLayout.gridHalfExtents", function()
 		end
 	end)
 
-	it("fits inside the default 512 stud baseplate", function()
+	it("fits inside the 2048 stud baseplate", function()
 		-- The plot grid is generated on top of the existing baseplate rather than
-		-- replacing it, so it has to actually fit.
+		-- replacing it, so it has to actually fit. Measured from the live place: the
+		-- default baseplate is 2048 studs square, not the 512 this test first assumed.
 		local halfX, halfZ = PlotLayout.gridHalfExtents(Plots)
-		expect(halfX).toBeLessThan(256)
-		expect(halfZ).toBeLessThan(256)
+		expect(halfX).toBeLessThan(1024)
+		expect(halfZ).toBeLessThan(1024)
 	end)
 end)
