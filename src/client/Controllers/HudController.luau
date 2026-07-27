@@ -12,6 +12,7 @@ local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
 local create = require(script.Parent.Parent.UI.create)
+local FloatingGain = require(script.Parent.Parent.UI.FloatingGain)
 local ShopController = require(script.Parent.ShopController)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -25,7 +26,6 @@ local COIN = Color3.fromRGB(235, 203, 139)
 
 local HudController = {}
 
-local gui: ScreenGui? = nil
 local amountLabel: TextLabel? = nil
 local amountScale: UIScale? = nil
 local collectSound: Sound? = nil
@@ -36,40 +36,19 @@ local function corner(radius: number): Instance
 end
 
 local function showGain(amount: number): ()
-	local root = gui
 	local sound = collectSound
-	if root == nil or sound == nil then
+	if sound == nil then
 		return
 	end
 
 	sound:Play()
 
-	local label = create("TextLabel", {
-		Name = "CoinGain",
-		Size = UDim2.fromOffset(180, 28),
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -16, 0, 70),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		TextSize = 18,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = COIN,
-		TextStrokeTransparency = 0.55,
-		Text = `+{Format.short(amount)}`,
-		Parent = root,
-	}) :: TextLabel
-
-	TweenService
-		:Create(label, TweenInfo.new(0.65, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-			Position = UDim2.new(1, -16, 0, 42),
-			TextTransparency = 1,
-			TextStrokeTransparency = 1,
-		})
-		:Play()
-
-	task.delay(0.7, function()
-		label:Destroy()
-	end)
+	--[[
+		The gain erupts off the character, not out of the HUD corner. The bank in the corner
+		still pops, so the two together say "this much, and it went there", which is the whole
+		job of the feedback.
+	]]
+	FloatingGain.show(Players.LocalPlayer.Character, Icons.money, `+{Format.short(amount)}`)
 
 	local scale = amountScale
 	if scale then
@@ -114,7 +93,6 @@ local function build(): ()
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
 	}) :: ScreenGui
-	gui = root
 
 	local scale = create("UIScale", { Scale = 1 }) :: UIScale
 	amountScale = scale
@@ -132,11 +110,18 @@ local function build(): ()
 	}) :: TextLabel
 	amountLabel = label
 
+	--[[
+		Bottom right, matching where a simulator player already looks for their balance, and
+		diagonally opposite the launcher column at bottom left so neither crowds the other.
+
+		Top centre and top right both belong to Roblox: the chat and player list live up there
+		and can push a banner around or sit on top of it.
+	]]
 	local counter = create("Frame", {
 		Name = "Coins",
 		Size = UDim2.fromOffset(190, 52),
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -16, 0, 14),
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -16, 1, -16),
 		BackgroundColor3 = INK,
 		BackgroundTransparency = 0.06,
 		BorderSizePixel = 0,
@@ -144,12 +129,17 @@ local function build(): ()
 	}, {
 		corner(10),
 		scale,
+		create("UIStroke", {
+			Thickness = 3,
+			Color = Color3.fromRGB(30, 34, 44),
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		}),
 		create("ImageLabel", {
 			Name = "Icon",
 			Size = UDim2.fromOffset(32, 32),
 			Position = UDim2.fromOffset(10, 10),
 			BackgroundTransparency = 1,
-			Image = Icons.currency,
+			Image = Icons.money,
 			ScaleType = Enum.ScaleType.Fit,
 		}),
 		create("TextLabel", {

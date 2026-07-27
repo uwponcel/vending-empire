@@ -43,7 +43,7 @@ type ModelState = {
 local states: { [Model]: ModelState? } = {}
 
 local ICON_BY_PROMPT: { [string]: string } = {
-	CollectPrompt = Icons.currency,
+	CollectPrompt = Icons.money,
 	UpgradePrompt = Icons.upgrade,
 }
 

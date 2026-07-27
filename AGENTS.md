@@ -197,6 +197,10 @@ These all come from real errors the analyzer found:
 - A variable reassigned inside the loop that tests it stays optional afterwards. Wrap the wait
   in a function that returns the value, so the caller's `if x == nil then return end` narrows
   it, instead of casting at every use.
+- An array of mixed instance types infers from its **first element**, so `{ image, label }` is a
+  `{ImageLabel}` and the TextLabel is rejected. Annotate it `local children: { Instance } = ...`.
+- `UI/create` returns `Instance`. Cast at the binding whenever a property of the concrete class
+  is touched later (`:: UIStroke`, `:: TextLabel`), not at each use site.
 
 ### Style
 
@@ -311,6 +315,52 @@ studs away, with eleven empty slots between them and it. **Every layout test sti
 because the grid is symmetric under a row flip and every assertion was about centring,
 containment or spacing. Only a screenshot showed it. There is now a test for the ordering
 itself, and it fails if the negation is removed.
+
+### Screen UI conventions
+
+**Animate `UIScale`, never `Size`.** Tweening `Size` on anything inside a `UIListLayout` re-runs
+layout every frame of the tween and shoves its neighbours around. A `UIScale` scales the rendered
+result and leaves the layout box alone, so a button can overshoot its own bounds without moving
+anything else. `UI/MenuButton` does every state and bounce through one.
+
+**The screen has fixed zones**, so nothing has to negotiate position with anything else:
+
+| Zone | Owner |
+|---|---|
+| Bottom left | the launcher column, `UI/MenuButton` in a `UIListLayout` |
+| Bottom right | the coin bank |
+| Bottom centre | the rejection toast |
+| Top edge | Roblox. Chat and the player list live there and will sit on top of anything we put there |
+
+**Attention motion is budgeted, not banned.** See the anti-references in `PRODUCT.md` for the
+rules and why the original blanket ban was lifted. The short version: launchers only, jittered
+interval, never while hovered, pressed, or open, and always skipped under
+`GuiService.ReducedMotionEnabled`.
+
+**One glyph per concept.** `Config/Icons.money` is the single money icon, on the bank, the buy
+buttons, the collect prompt, and the floating gain. There were two before, and two glyphs for one
+concept means a player has to learn that both mean coins.
+
+### `ClipsDescendants` does not clip a rotated descendant
+
+`UI/Sunburst` draws rays as rotated rectangles. The first version overshot them past the container
+and set `ClipsDescendants = true` to trim them. The clip was **silently ignored**, because every
+ray was rotated, and the rays sprayed out across the world past the edge of the shop panel.
+
+Rotated children have to be bounded by construction. A rectangle no longer than its container is
+tall, pinned to the container's centre, stays inside the circle of that diameter at every
+rotation, so the container is what guarantees containment and the caller must size it to fit. A
+test that measures each ray's half-diagonal against the card bounds is cheaper than trusting it.
+
+### A SpecialMesh inherits its Part's Transparency
+
+`MachineModel` builds an invisible collision `Body` and a separate `Visual` part that carries the
+`SpecialMesh`. Only the Body is transparent. Copying `Transparency = 1` onto a mesh carrier makes
+the mesh itself render fully transparent, which is how `UI/MachineThumbnail` first shipped nine
+blank shop cards with a correctly framed camera pointed at a correctly positioned mesh.
+
+A `FileMesh` SpecialMesh replaces the Part's geometry, so an opaque carrier draws no box. Carriers
+are opaque; only a separate collision body is hidden.
 
 ### BillboardGui: pixels for identity, studs for detail
 

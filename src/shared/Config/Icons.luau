@@ -9,9 +9,17 @@
 
 local Icons = {
 	shop = "rbxassetid://92353483125582",
-	currency = "rbxassetid://113631549631728",
+	--[[
+		One money icon for every surface that talks about money: the coin bank, the buy
+		buttons, the collect prompt, and the floating gain on the player.
+
+		There were two before, a cash stack on buy buttons and a money bag on the coin bank.
+		Two glyphs for one concept means a player has to learn that both mean coins, and the
+		number they see on a buy button is denominated in the thing the bank counts. Same
+		concept, same glyph.
+	]]
+	money = "rbxassetid://77216298800748",
 	upgrade = "rbxassetid://99044944223614",
-	buy = "rbxassetid://77216298800748",
 	error = "rbxassetid://105424546466549",
 	success = "rbxassetid://113242667524418",
 }

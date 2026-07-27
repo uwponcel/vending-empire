@@ -9,8 +9,12 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local create = require(script.Parent.Parent.UI.create)
+local MachineThumbnail = require(script.Parent.Parent.UI.MachineThumbnail)
+local MenuButton = require(script.Parent.Parent.UI.MenuButton)
+local Sunburst = require(script.Parent.Parent.UI.Sunburst)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Icons = require(Shared.Config.Icons)
@@ -37,7 +41,6 @@ local MESSAGES: { [string]: string } = {
 
 local INK = Color3.fromRGB(46, 52, 64)
 local SURFACE = Color3.fromRGB(59, 66, 82)
-local MUTED = Color3.fromRGB(76, 86, 106)
 local QUIET_TEXT = Color3.fromRGB(180, 190, 205)
 local SNOW = Color3.fromRGB(236, 239, 244)
 local GREEN = Color3.fromRGB(163, 190, 140)
@@ -54,14 +57,57 @@ local CATEGORY_COLOR: { [Machines.Category]: Color3 } = {
 	electronics = Color3.fromRGB(180, 142, 173),
 }
 
+--[[
+	Card colours are the category colour shifted per tier within the category.
+
+	Storefronts in this genre give every card its own colour, which makes a grid scannable. Doing
+	that with nine unrelated hues would throw away the category language the rest of the game
+	teaches, so instead each card keeps its category hue and separates on brightness. Cards are
+	individually distinct, and a Snacks card still reads as a Snacks card.
+
+	Tier is 1-based across all nine machines, so it is reduced to a position within its own
+	category first.
+]]
+local TIER_SHIFTS = { -0.12, 0.06, 0.24 }
+
+local function cardColor(config: Machines.Machine): Color3
+	local base = CATEGORY_COLOR[config.category]
+	local shift = TIER_SHIFTS[(config.tier - 1) % #TIER_SHIFTS + 1]
+
+	if shift < 0 then
+		return base:Lerp(Color3.fromRGB(24, 27, 35), -shift)
+	end
+	return base:Lerp(Color3.new(1, 1, 1), shift)
+end
+
+--- Dark outline shared by every card, pill, and close button. The genre's whole look rests on it.
+local OUTLINE = Color3.fromRGB(24, 27, 35)
+--- Saturated price pill. Deliberately louder than any other green in the interface.
+local PRICE_GREEN = Color3.fromRGB(88, 176, 96)
+local LOCKED_GREY = Color3.fromRGB(88, 95, 112)
+
+local CARD_WIDTH = 150
+local CARD_HEIGHT = 202
+local CARD_GAP = 10
+
+--- Artwork band inside a card. The sunburst centres on this, not on the card.
+local ART_TOP = 44
+local ART_HEIGHT = 92
+--[[
+	Must not exceed the card's narrow dimension, and must fit around its centre. Sunburst rays are
+	bounded by their container rather than clipped, because Roblox will not clip a rotated child,
+	so an oversized value here puts rays outside the card with nothing to stop them.
+]]
+local SUNBURST_DIAMETER = 140
+
 local TOAST_SECONDS = 2.5
 
 local ShopController = {}
 
-type Row = {
-	frame: Frame,
-	button: TextButton,
-	buyIcon: ImageLabel,
+type Card = {
+	frame: TextButton,
+	pill: Frame,
+	pillIcon: ImageLabel,
 	price: TextLabel,
 	detail: TextLabel,
 	category: Machines.Category,
@@ -74,10 +120,9 @@ type Toast = {
 }
 
 local snapshot: Remotes.Snapshot? = nil
-local rows: { [string]: Row } = {}
+local cards: { [string]: Card } = {}
 local tabs: { [Machines.Category]: TextButton } = {}
 local activeCategory: Machines.Category = "drinks"
-local list: ScrollingFrame? = nil
 local toast: Toast? = nil
 local toastToken = 0
 
@@ -109,8 +154,10 @@ end
 local function selectCategory(category: Machines.Category): ()
 	activeCategory = category
 
-	for _, row in rows do
-		row.frame.Visible = row.category == category
+	-- Roblox layouts skip invisible children, so hiding the other categories is all the
+	-- filtering the grid needs.
+	for _, card in cards do
+		card.frame.Visible = card.category == category
 	end
 
 	local function updateTab(tabCategory: Machines.Category): ()
@@ -122,10 +169,6 @@ local function selectCategory(category: Machines.Category): ()
 	updateTab("drinks")
 	updateTab("snacks")
 	updateTab("electronics")
-
-	if list then
-		list.CanvasPosition = Vector2.zero
-	end
 end
 
 local function refresh(): ()
@@ -135,96 +178,185 @@ local function refresh(): ()
 	end
 
 	for _, config in Machines.list do
-		local row = rows[config.id]
-		if row == nil then
+		local card = cards[config.id]
+		if card == nil then
 			continue
 		end
 
 		local affordable = current.coins >= config.cost
-		row.price.Text = `Buy {Format.short(config.cost)}`
-		row.button.BackgroundColor3 = if affordable then CATEGORY_COLOR[config.category] else MUTED
-		row.price.TextTransparency = if affordable then 0 else 0.35
-		row.buyIcon.ImageTransparency = if affordable then 0 else 0.35
-		row.button.Active = affordable
-		row.button.AutoButtonColor = affordable
+
+		--[[
+			Affordability is carried by the word as well as the colour. "Buy" versus "Need" says
+			which state this is without relying on green against grey, which is the one thing
+			PRODUCT.md's accessibility section rules out.
+		]]
+		card.price.Text = if affordable
+			then `Buy {Format.short(config.cost)}`
+			else `Need {Format.short(config.cost)}`
+		card.pill.BackgroundColor3 = if affordable then PRICE_GREEN else LOCKED_GREY
+		card.pillIcon.ImageTransparency = if affordable then 0 else 0.4
+		card.frame.Active = affordable
+		card.frame.AutoButtonColor = affordable
 
 		local rate = config.baseRate * current.prestigeMultiplier
-		row.detail.Text =
-			`{Format.short(rate)}/s  ·  {Format.short(rate * config.fillSeconds)} capacity`
+		card.detail.Text =
+			`{Format.short(rate)}/s  ·  {Format.short(rate * config.fillSeconds)} cap`
 	end
 end
 
-local function buildRow(config: Machines.Machine): Frame
-	local name = create("TextLabel", {
-		Size = UDim2.new(1, -112, 0, 22),
-		Position = UDim2.fromOffset(12, 8),
+--- Thick dark outline. Every card, pill, and title in the shop wears one; it is the whole look.
+local function outline(thickness: number): Instance
+	return create("UIStroke", {
+		Thickness = thickness,
+		Color = OUTLINE,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	})
+end
+
+--[[
+	One product card: title, live 3D portrait over a sunburst, stats, and a price pill.
+
+	THE WHOLE CARD IS THE BUTTON, not just the pill. The pill is where the eye goes and reads as
+	the call to action, but a 150 by 202 target beats a 130 by 32 one on a phone, and there is
+	nothing else on a card to click.
+]]
+local function buildCard(config: Machines.Machine): TextButton
+	local color = cardColor(config)
+
+	local title = create("TextLabel", {
+		Name = "Title",
+		Size = UDim2.new(1, -16, 0, 34),
+		Position = UDim2.fromOffset(8, 8),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamMedium,
+		Font = Enum.Font.GothamBlack,
 		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true,
 		TextColor3 = SNOW,
 		Text = config.displayName,
+	}, {
+		-- Contextual, not Border: this strokes the glyphs so the name stays legible over a
+		-- bright sunburst, which a border around the label would not do.
+		create("UIStroke", {
+			Thickness = 2,
+			Color = OUTLINE,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		}),
 	})
 
+	--[[
+		The live mesh preview, or a flat money icon when the machine has no art registered yet.
+		A machine can reach the tuning table before its mesh does, and a card with a blank hole
+		in it looks broken in a way a placeholder does not.
+	]]
+	local art: Instance = MachineThumbnail.create(config.id)
+		or create("ImageLabel", {
+			Name = "Thumbnail",
+			BackgroundTransparency = 1,
+			Image = Icons.money,
+			ScaleType = Enum.ScaleType.Fit,
+		})
+	local artFrame = art :: GuiObject
+	artFrame.Size = UDim2.new(1, -20, 0, ART_HEIGHT)
+	artFrame.Position = UDim2.fromOffset(10, ART_TOP)
+
 	local detail = create("TextLabel", {
-		Size = UDim2.new(1, -112, 0, 18),
-		Position = UDim2.fromOffset(12, 31),
+		Name = "Detail",
+		Size = UDim2.new(1, -16, 0, 14),
+		Position = UDim2.fromOffset(8, 138),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.Gotham,
-		TextSize = 12,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = QUIET_TEXT,
+		Font = Enum.Font.GothamBold,
+		TextSize = 11,
+		TextColor3 = SNOW,
+		TextTransparency = 0.15,
 		Text = "",
 	}) :: TextLabel
 
-	local buyIcon = create("ImageLabel", {
+	local pillIcon = create("ImageLabel", {
 		Name = "Icon",
 		Size = UDim2.fromOffset(22, 22),
-		Position = UDim2.fromOffset(7, 6),
+		Position = UDim2.new(0, 8, 0.5, -11),
 		BackgroundTransparency = 1,
-		Image = Icons.buy,
+		Image = Icons.money,
 		ScaleType = Enum.ScaleType.Fit,
 	}) :: ImageLabel
 
 	local price = create("TextLabel", {
 		Name = "Price",
-		Size = UDim2.new(1, -36, 1, 0),
-		Position = UDim2.fromOffset(34, 0),
+		Size = UDim2.new(1, -34, 1, 0),
+		Position = UDim2.fromOffset(32, 0),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		TextSize = 12,
-		TextXAlignment = Enum.TextXAlignment.Left,
+		Font = Enum.Font.GothamBlack,
+		TextSize = 14,
 		TextColor3 = SNOW,
 		Text = `Buy {Format.short(config.cost)}`,
+	}, {
+		create("UIStroke", {
+			Thickness = 2,
+			Color = OUTLINE,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		}),
 	}) :: TextLabel
 
-	local button = create("TextButton", {
-		Size = UDim2.fromOffset(100, 34),
-		Position = UDim2.new(1, -112, 0, 13),
-		BackgroundColor3 = CATEGORY_COLOR[config.category],
+	local pill = create("Frame", {
+		Name = "Pill",
+		Size = UDim2.new(1, -20, 0, 36),
+		Position = UDim2.new(0, 10, 1, -46),
+		BackgroundColor3 = PRICE_GREEN,
+		BorderSizePixel = 0,
+	}, { corner(10), outline(2), pillIcon, price }) :: Frame
+
+	local scale = create("UIScale", { Scale = 1 }) :: UIScale
+
+	local frame = create("TextButton", {
+		Name = config.id,
+		Size = UDim2.fromOffset(CARD_WIDTH, CARD_HEIGHT),
+		BackgroundColor3 = color,
 		BorderSizePixel = 0,
 		Text = "",
 		AutoButtonColor = true,
-	}, { corner(7), buyIcon, price }) :: TextButton
+		LayoutOrder = config.tier,
+		Visible = config.category == activeCategory,
+	}, {
+		corner(14),
+		outline(3),
+		scale,
+		-- Sunburst first, so everything else draws over it. Centred on the artwork band so the
+		-- light reads as coming from behind the product.
+		Sunburst.create(
+			color,
+			SUNBURST_DIAMETER,
+			Vector2.new(CARD_WIDTH / 2, ART_TOP + ART_HEIGHT / 2)
+		),
+		title,
+		art,
+		detail,
+		pill,
+	}) :: TextButton
 
-	button.Activated:Connect(function()
+	frame.MouseEnter:Connect(function()
+		TweenService
+			:Create(scale, TweenInfo.new(0.12, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+				Scale = 1.04,
+			})
+			:Play()
+	end)
+	frame.MouseLeave:Connect(function()
+		TweenService
+			:Create(scale, TweenInfo.new(0.12, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+				Scale = 1,
+			})
+			:Play()
+	end)
+
+	frame.Activated:Connect(function()
 		Remotes.get(Remotes.names.buyMachine)
 			:FireServer({ typeId = config.id } :: Remotes.BuyMachine)
 	end)
 
-	local frame = create("Frame", {
-		Name = config.id,
-		Size = UDim2.new(1, -8, 0, 60),
-		BackgroundColor3 = SURFACE,
-		BorderSizePixel = 0,
-		LayoutOrder = config.tier,
-		Visible = config.category == activeCategory,
-	}, { corner(9), name, detail, button }) :: Frame
-
-	rows[config.id] = {
+	cards[config.id] = {
 		frame = frame,
-		button = button,
-		buyIcon = buyIcon,
+		pill = pill,
+		pillIcon = pillIcon,
 		price = price,
 		detail = detail,
 		category = config.category,
@@ -234,8 +366,8 @@ end
 
 local function buildTabs(): Frame
 	local bar = create("Frame", {
-		Size = UDim2.new(1, -16, 0, 34),
-		Position = UDim2.fromOffset(8, 42),
+		Size = UDim2.new(1, -28, 0, 34),
+		Position = UDim2.fromOffset(14, 48),
 		BackgroundTransparency = 1,
 	}) :: Frame
 
@@ -253,13 +385,13 @@ local function buildTabs(): Frame
 			Size = UDim2.new(1 / 3, -4, 1, 0),
 			BackgroundColor3 = SURFACE,
 			BorderSizePixel = 0,
-			Font = Enum.Font.GothamBold,
-			TextSize = 12,
+			Font = Enum.Font.GothamBlack,
+			TextSize = 14,
 			TextColor3 = QUIET_TEXT,
 			Text = CATEGORY_LABEL[category],
 			LayoutOrder = order,
 			AutoButtonColor = true,
-		}, { corner(7) }) :: TextButton
+		}, { corner(9), outline(2) }) :: TextButton
 
 		tab.Activated:Connect(function()
 			selectCategory(category)
@@ -274,61 +406,101 @@ local function buildTabs(): Frame
 	return bar
 end
 
-local function buildPanel(): Frame
-	local machineList = create("ScrollingFrame", {
-		Size = UDim2.new(1, -16, 1, -86),
-		Position = UDim2.fromOffset(8, 80),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 3,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-	}) :: ScrollingFrame
-	list = machineList
+--[[
+	The panel shell.
 
-	create("UIListLayout", {
-		Padding = UDim.new(0, 7),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = machineList,
-	})
+	Kept on the dark Nord surface rather than the light sheet the reference storefronts use. The
+	bank, the launcher, and the toast are all dark, and a white panel would read as a different
+	application dropped on top of the game. Saturated cards on a dark shell also carry more
+	contrast than the same cards on white, which is the part that actually draws the eye.
+
+	Sized to the grid instead of the reverse: exactly three machines per category, so one row of
+	three cards fits with no scrolling and no partly visible fourth card teasing the edge.
+]]
+local function buildPanel(onClose: () -> ()): Frame
+	local grid = create("Frame", {
+		Name = "Cards",
+		Size = UDim2.fromOffset(CARD_WIDTH * 3 + CARD_GAP * 2, CARD_HEIGHT),
+		Position = UDim2.fromOffset(14, 88),
+		BackgroundTransparency = 1,
+	}, {
+		create("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, CARD_GAP),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	}) :: Frame
 
 	for _, config in Machines.list do
-		buildRow(config).Parent = machineList
+		buildCard(config).Parent = grid
 	end
 
 	local title = create("TextLabel", {
-		Size = UDim2.new(1, -56, 0, 28),
-		Position = UDim2.fromOffset(44, 8),
+		Size = UDim2.new(1, -110, 0, 32),
+		Position = UDim2.fromOffset(52, 10),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		TextSize = 17,
+		Font = Enum.Font.GothamBlack,
+		TextSize = 22,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = SNOW,
-		Text = "Machine Shop",
+		Text = "MACHINE SHOP",
+	}, {
+		create("UIStroke", {
+			Thickness = 2,
+			Color = OUTLINE,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		}),
 	})
+
+	--[[
+		Oversized circular close, top right, as loud as the reference.
+
+		A panel this big needs an exit that is found without looking, and the launcher toggling it
+		shut is not discoverable once the panel has covered the launcher's corner of the eye.
+	]]
+	local close = create("TextButton", {
+		Name = "Close",
+		Size = UDim2.fromOffset(38, 38),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 8),
+		BackgroundColor3 = RED,
+		BorderSizePixel = 0,
+		Font = Enum.Font.GothamBlack,
+		TextSize = 20,
+		TextColor3 = SNOW,
+		Text = "X",
+		AutoButtonColor = true,
+	}, {
+		-- Half the height, so the corner radius makes it an actual circle.
+		create("UICorner", { CornerRadius = UDim.new(0, 19) }),
+		outline(3),
+	}) :: TextButton
+	close.Activated:Connect(onClose)
 
 	local panel = create("Frame", {
 		Name = "ShopPanel",
-		Size = UDim2.fromOffset(336, 290),
+		Size = UDim2.fromOffset(CARD_WIDTH * 3 + CARD_GAP * 2 + 28, CARD_HEIGHT + 102),
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 16, 1, -72),
+		Position = UDim2.new(0, 16, 1, -104),
 		BackgroundColor3 = INK,
-		BackgroundTransparency = 0.06,
+		BackgroundTransparency = 0.04,
 		BorderSizePixel = 0,
 		Visible = false,
 	}, {
-		corner(12),
+		corner(16),
+		outline(3),
 		create("ImageLabel", {
 			Name = "ShopIcon",
-			Size = UDim2.fromOffset(26, 26),
-			Position = UDim2.fromOffset(12, 8),
+			Size = UDim2.fromOffset(32, 32),
+			Position = UDim2.fromOffset(14, 10),
 			BackgroundTransparency = 1,
 			Image = Icons.shop,
 			ScaleType = Enum.ScaleType.Fit,
 		}),
 		title,
+		close,
 		buildTabs(),
-		machineList,
+		grid,
 	}) :: Frame
 
 	selectCategory(activeCategory)
@@ -344,44 +516,62 @@ local function build(): ()
 		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
 	})
 
-	local shopPanel = buildPanel()
-	shopPanel.Parent = gui
+	--[[
+		Panel visibility and launcher state move together, always, through one function. Two call
+		sites toggle the shop (the launcher and the close button) and the launcher's open look has
+		to survive both, which it will not if each site sets visibility itself.
+	]]
+	local shopButton: MenuButton.Handle? = nil
+	local panel: Frame? = nil
 
-	local toggle = create("TextButton", {
-		Name = "ShopToggle",
-		Size = UDim2.fromOffset(120, 44),
+	local function setPanelOpen(open: boolean): ()
+		if panel then
+			panel.Visible = open
+		end
+		if shopButton then
+			shopButton.setOpen(open)
+		end
+	end
+
+	local shopPanel = buildPanel(function()
+		setPanelOpen(false)
+	end)
+	shopPanel.Parent = gui
+	panel = shopPanel
+
+	--[[
+		The launcher column. One button today; Phase 5 adds prestige beside it, which is why
+		the layout exists now rather than a single absolutely positioned button.
+	]]
+	local launchers = create("Frame", {
+		Name = "Launchers",
+		Size = UDim2.fromOffset(76, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 16, 1, -16),
-		BackgroundColor3 = CATEGORY_COLOR[activeCategory],
-		BorderSizePixel = 0,
-		Text = "",
+		BackgroundTransparency = 1,
 		Parent = gui,
 	}, {
-		corner(10),
-		create("ImageLabel", {
-			Name = "Icon",
-			Size = UDim2.fromOffset(28, 28),
-			Position = UDim2.fromOffset(10, 8),
-			BackgroundTransparency = 1,
-			Image = Icons.shop,
-			ScaleType = Enum.ScaleType.Fit,
+		create("UIListLayout", {
+			Padding = UDim.new(0, 10),
+			VerticalAlignment = Enum.VerticalAlignment.Bottom,
+			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
-		create("TextLabel", {
-			Name = "Label",
-			Size = UDim2.new(1, -48, 1, 0),
-			Position = UDim2.fromOffset(44, 0),
-			BackgroundTransparency = 1,
-			Font = Enum.Font.GothamBold,
-			TextSize = 15,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = SNOW,
-			Text = "Shop",
-		}),
-	}) :: TextButton
+	}) :: Frame
 
-	toggle.Activated:Connect(function()
-		shopPanel.Visible = not shopPanel.Visible
-	end)
+	-- Bound to a non-optional local as well, because `shopButton` has to be declared ahead of
+	-- `setPanelOpen` and so stays `Handle?` for the analyzer.
+	local created = MenuButton.create({
+		icon = Icons.shop,
+		color = CATEGORY_COLOR[activeCategory],
+		tooltip = "Machine Shop",
+		order = 1,
+		onActivated = function()
+			setPanelOpen(not shopPanel.Visible)
+		end,
+	})
+	shopButton = created
+	created.button.Parent = launchers
 
 	local toastIcon = create("ImageLabel", {
 		Name = "Icon",

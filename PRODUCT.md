@@ -24,10 +24,21 @@ and the interface should feel like part of the game rather than a separate dashb
 
 ## Anti-references
 
-Avoid generic simulator UI with saturated gradients, oversized currency banners, stacked
-popups, constant particle noise, or buttons competing for attention. Avoid dense shop screens
-that hide the world, decorative motion without state meaning, and visual effects that make
-neighbouring plots harder to compare.
+Avoid saturated gradients, stacked popups, constant particle noise, and dense shop screens that
+hide the world. Avoid visual effects that make neighbouring plots harder to compare.
+
+Two earlier entries here were removed deliberately, not by drift. "Buttons competing for
+attention" and "decorative motion without state meaning" ruled out the genre's own launcher
+idiom: a large icon-only button that bounces occasionally to pull the eye. That idiom is now
+wanted, because the reference games that hold players use it and because a launcher a new player
+never notices is worse than one that nudges. What replaces the blanket ban is a budget:
+
+- Attention motion belongs on **launchers only**, never on a value the player is reading.
+- It plays on an interval, jittered per button, and never while that button is hovered, pressed,
+  or already open.
+- It is skipped entirely under `GuiService.ReducedMotionEnabled`.
+- One launcher column, bottom left. Anything that wants attention competes for a slot in it
+  rather than adding a new floating button somewhere else.
 
 ## Design Principles
 
