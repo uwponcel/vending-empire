@@ -19,6 +19,7 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -36,8 +37,32 @@ local INTERVAL_SECONDS = 0.25
 local PLOTS_FOLDER = "Plots"
 local READY_COLOR = Color3.fromRGB(163, 190, 140)
 local FILLING_COLOR = Color3.fromRGB(216, 222, 233)
+local PANEL_COLOR = Color3.fromRGB(46, 52, 64)
 
 local MachineDisplayController = {}
+local lastCollectAtByModel: { [Model]: number } = {}
+local lastLevelByModel: { [Model]: number } = {}
+
+local function showRestock(model: Model): ()
+	local panel = model:FindFirstChild("Panel")
+	if panel == nil or not panel:IsA("BasePart") then
+		return
+	end
+
+	panel.Color = READY_COLOR
+	panel.Transparency = 0
+
+	task.delay(0.08, function()
+		if panel.Parent == nil then
+			return
+		end
+		TweenService:Create(
+			panel,
+			TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+			{ Color = PANEL_COLOR, Transparency = 0.25 }
+		):Play()
+	end)
+end
 
 --- The pending label on a machine, or nil if the model is not shaped like one.
 local function pendingLabel(model: Model): TextLabel?
@@ -55,14 +80,32 @@ local function updateMachine(model: Model, now: number): ()
 	local rate = model:GetAttribute("Rate")
 	local capacity = model:GetAttribute("Capacity")
 	local lastCollectAt = model:GetAttribute("LastCollectAt")
+	local level = model:GetAttribute("Level")
 
 	-- Attributes replicate independently of the model, so a machine can exist for a frame
 	-- with only some of them set. Checked rather than assumed.
-	if type(rate) ~= "number" or type(capacity) ~= "number" or type(lastCollectAt) ~= "number" then
+	if
+		type(rate) ~= "number"
+		or type(capacity) ~= "number"
+		or type(lastCollectAt) ~= "number"
+		or type(level) ~= "number"
+	then
 		return
 	end
 	if rate <= 0 then
 		return
+	end
+
+	local previousCollectAt = lastCollectAtByModel[model]
+	local previousLevel = lastLevelByModel[model]
+	lastCollectAtByModel[model] = lastCollectAt
+	lastLevelByModel[model] = level
+	if
+		previousCollectAt ~= nil
+		and previousLevel == level
+		and lastCollectAt > previousCollectAt
+	then
+		showRestock(model)
 	end
 
 	local label = pendingLabel(model)
@@ -71,14 +114,9 @@ local function updateMachine(model: Model, now: number): ()
 	end
 
 	local pending = Accrual.pending(rate, capacity, now - lastCollectAt)
-
-	if pending <= 0 then
-		label.Text = ""
-		return
-	end
-
 	local full = pending >= math.floor(capacity)
-	label.Text = if full then `FULL {Format.short(pending)}` else Format.short(pending)
+	local progress = `{Format.short(pending)} / {Format.short(math.floor(capacity))}`
+	label.Text = if full then `FULL · {progress}` else progress
 	label.TextColor3 = if full then READY_COLOR else FILLING_COLOR
 end
 
@@ -98,6 +136,13 @@ local function updateAll(): ()
 			if child:IsA("Model") and child:GetAttribute("Slot") ~= nil then
 				updateMachine(child, now)
 			end
+		end
+	end
+
+	for model in lastCollectAtByModel do
+		if model.Parent == nil then
+			lastCollectAtByModel[model] = nil
+			lastLevelByModel[model] = nil
 		end
 	end
 end

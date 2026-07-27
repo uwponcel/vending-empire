@@ -89,6 +89,19 @@ describe("Accrual.collect", function()
 		expect(again.amount).toBe(0)
 	end)
 
+	it("carries a fractional capacity without carrying overflow", function()
+		local rate = 1.18
+		local capacity = 23.6
+		local result = Accrual.collect(rate, capacity, 0, 3600)
+
+		expect(result.amount).toBe(23)
+		expect(Accrual.pending(rate, capacity, 3600 - result.lastCollectAt)).toBe(0)
+
+		-- The saved 0.6 combines with newly earned value, while the hours of overflow are gone.
+		local next = Accrual.collect(rate, capacity, result.lastCollectAt, 3600 + 0.4 / rate)
+		expect(next.amount).toBe(1)
+	end)
+
 	it("discards overflow rather than banking it", function()
 		local result = Accrual.collect(RATE, CAPACITY, 0, 3600)
 		-- An hour on a machine holding 60 pays 60, not 3600.
@@ -105,6 +118,34 @@ describe("Accrual.collect", function()
 		local result = Accrual.collect(RATE, CAPACITY, 0, 60)
 		expect(result.amount).toBe(60)
 		expect(result.lastCollectAt).toBe(60)
+	end)
+end)
+
+describe("Accrual.rebaseLastCollectAt", function()
+	it("preserves accrued coins when an upgrade raises the rate", function()
+		local now = 1_785_179_968
+		local rebased = Accrual.rebaseLastCollectAt(1, 20, now - 20, 1.18, now)
+
+		expect(Accrual.pending(1, 20, 20)).toBe(20)
+		expect(Accrual.pending(1.18, 23.6, now - rebased)).toBe(20)
+	end)
+
+	it("preserves the unpaid fraction below one coin", function()
+		local rebased = Accrual.rebaseLastCollectAt(0.5, 20, 1000, 1, 1001)
+
+		expect(Accrual.pending(1, 40, 1001 - rebased)).toBe(0)
+		local later = Accrual.collect(1, 40, rebased, 1001.5)
+		expect(later.amount).toBe(1)
+	end)
+
+	it("preserves the old capacity rather than filling the larger upgraded capacity", function()
+		local rebased = Accrual.rebaseLastCollectAt(1, 20, 0, 2, 100)
+
+		expect(Accrual.pending(2, 40, 100 - rebased)).toBe(20)
+	end)
+
+	it("starts from now when the wall clock moved backwards", function()
+		expect(Accrual.rebaseLastCollectAt(1, 20, 2000, 2, 1000)).toBe(1000)
 	end)
 end)
 

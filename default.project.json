@@ -13,6 +13,9 @@
         "BuyMachine": {
           "$className": "RemoteEvent"
         },
+        "UpgradeMachine": {
+          "$className": "RemoteEvent"
+        },
         "Sync": {
           "$className": "RemoteEvent"
         },

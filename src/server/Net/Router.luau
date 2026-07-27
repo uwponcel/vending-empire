@@ -106,6 +106,22 @@ local function readBuyMachine(payload: any): Remotes.BuyMachine?
 	return { typeId = typeId, slot = slot }
 end
 
+local function readUpgradeMachine(payload: any): Remotes.UpgradeMachine?
+	if type(payload) ~= "table" then
+		return nil
+	end
+
+	local slot = payload.slot
+	local level = payload.level
+	if type(slot) ~= "number" or type(level) ~= "number" then
+		return nil
+	end
+
+	-- PlotState owns range and integrality checks so crafted NaN and fractional values are
+	-- exercised by the same pure rules as every other upgrade.
+	return { slot = slot, level = level }
+end
+
 local function onBuyMachine(player: Player, payload: any): ()
 	if not allow(player, Remotes.names.buyMachine) then
 		return
@@ -129,9 +145,27 @@ local function onBuyMachine(player: Player, payload: any): ()
 	end
 end
 
+local function onUpgradeMachine(player: Player, payload: any): ()
+	if not allow(player, Remotes.names.upgradeMachine) then
+		return
+	end
+
+	local request = readUpgradeMachine(payload)
+	if request == nil then
+		warn(`[Router] discarded a malformed {Remotes.names.upgradeMachine} from {player.Name}`)
+		return
+	end
+
+	local outcome = MachineService.upgrade(player, request.slot, request.level)
+	if outcome.tag == "err" then
+		Sync.notice(player, outcome.reason)
+	end
+end
+
 --- Requires `Remotes.build()` to have run, which the bootstrap does before any service starts.
 function Router.start(): ()
 	Remotes.get(Remotes.names.buyMachine).OnServerEvent:Connect(onBuyMachine)
+	Remotes.get(Remotes.names.upgradeMachine).OnServerEvent:Connect(onUpgradeMachine)
 
 	Players.PlayerRemoving:Connect(function(player)
 		buckets[player] = nil

@@ -152,6 +152,95 @@ describe("PlotState.purchaseRejection", function()
 	end)
 end)
 
+describe("PlotState.upgradeRejection", function()
+	local UPGRADE_COST = 38
+	local MAX_LEVEL = 8
+
+	local function upgradeState(coins: number, level: number?): PlotState.State
+		local current = state(coins, 3, { 2 })
+		current.machines[1].level = level or 1
+		return current
+	end
+
+	it("allows a current machine level and spending down to exactly zero", function()
+		expect(
+			PlotState.upgradeRejection(
+				upgradeState(UPGRADE_COST),
+				2,
+				1,
+				SLOT_COUNT,
+				UPGRADE_COST,
+				MAX_LEVEL
+			)
+		).toBe(nil)
+	end)
+
+	it("rejects a slot outside the physical plot before any other rule", function()
+		local broke = upgradeState(0)
+		expect(PlotState.upgradeRejection(broke, 0, 1, SLOT_COUNT, UPGRADE_COST, MAX_LEVEL)).toBe(
+			PlotState.Rejection.slotOutOfRange
+		)
+		expect(PlotState.upgradeRejection(broke, 1.5, 1, SLOT_COUNT, UPGRADE_COST, MAX_LEVEL)).toBe(
+			PlotState.Rejection.slotOutOfRange
+		)
+		expect(PlotState.upgradeRejection(broke, 0 / 0, 1, SLOT_COUNT, UPGRADE_COST, MAX_LEVEL)).toBe(
+			PlotState.Rejection.slotOutOfRange
+		)
+	end)
+
+	it("rejects an empty slot", function()
+		expect(
+			PlotState.upgradeRejection(
+				upgradeState(1_000),
+				1,
+				1,
+				SLOT_COUNT,
+				UPGRADE_COST,
+				MAX_LEVEL
+			)
+		).toBe(PlotState.Rejection.machineNotFound)
+	end)
+
+	it("rejects stale, fractional, and NaN levels", function()
+		local current = upgradeState(1_000, 3)
+		expect(PlotState.upgradeRejection(current, 2, 2, SLOT_COUNT, UPGRADE_COST, MAX_LEVEL)).toBe(
+			PlotState.Rejection.levelMismatch
+		)
+		expect(PlotState.upgradeRejection(current, 2, 3.5, SLOT_COUNT, UPGRADE_COST, MAX_LEVEL)).toBe(
+			PlotState.Rejection.levelMismatch
+		)
+		expect(PlotState.upgradeRejection(current, 2, 0 / 0, SLOT_COUNT, UPGRADE_COST, MAX_LEVEL)).toBe(
+			PlotState.Rejection.levelMismatch
+		)
+	end)
+
+	it("reports max level before funds", function()
+		expect(
+			PlotState.upgradeRejection(
+				upgradeState(0, MAX_LEVEL),
+				2,
+				MAX_LEVEL,
+				SLOT_COUNT,
+				UPGRADE_COST,
+				MAX_LEVEL
+			)
+		).toBe(PlotState.Rejection.maxLevel)
+	end)
+
+	it("rejects insufficient funds below the exact cost", function()
+		expect(
+			PlotState.upgradeRejection(
+				upgradeState(UPGRADE_COST - 1),
+				2,
+				1,
+				SLOT_COUNT,
+				UPGRADE_COST,
+				MAX_LEVEL
+			)
+		).toBe(PlotState.Rejection.insufficientFunds)
+	end)
+end)
+
 describe("PlotState mutations keep the array dense", function()
 	it("appends rather than indexing by slot", function()
 		local machines: { PlotState.MachineRecord } = {}

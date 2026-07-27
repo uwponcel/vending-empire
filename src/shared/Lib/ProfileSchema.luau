@@ -53,16 +53,26 @@ export type Data = {
 export type Migration = (Data) -> ()
 
 local ProfileSchema = {
-	VERSION = 1,
+	VERSION = 3,
 }
 
 --[[
 	migrations[n] upgrades version n to version n + 1.
 
-	Empty while VERSION is 1. When adding one, never mutate an existing entry: a
-	migration that has already run against live data is history, not code.
+	When adding one, never mutate an existing entry: a migration that has already run
+	against live data is history, not code.
 ]]
-local migrations: { [number]: Migration } = {}
+local migrations: { [number]: Migration } = {
+	[1] = function(data: Data)
+		-- Phase 4 made the first row four slots wide. This migration has already run on
+		-- live data and must remain byte-for-byte equivalent in effect.
+		data.slotsUnlocked = math.max(data.slotsUnlocked, 4)
+	end,
+	[2] = function(data: Data)
+		-- Every visible pad is usable until a dedicated slot-unlock system exists.
+		data.slotsUnlocked = math.max(data.slotsUnlocked, 12)
+	end,
+}
 
 --[[
 	A fresh default profile.

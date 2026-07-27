@@ -18,6 +18,9 @@ export type UpgradeParams = {
 	--- Level 1 -> 2 costs this fraction of the machine's purchase price.
 	costFactor: number,
 	maxLevel: number,
+	--- Per-machine floor between upgrade attempts. The expected-level check prevents stale
+	--- purchases; this keeps a crafted client from making the service do unbounded work.
+	cooldownSeconds: number,
 }
 
 local Economy = {
@@ -25,10 +28,9 @@ local Economy = {
 	--- decision a new player makes is a purchase rather than a wait.
 	startingCoins = 100,
 
-	--- Slots are the scarce resource. While a player has spare slots, buying the next
-	--- machine always beats upgrading. Once slots run out, upgrades become the only
-	--- sink, which is what gives the upgrade curve a job.
-	baseSlots = 3,
+	--- Every visible pad is usable until a real slot-unlock system ships. Showing twelve
+	--- identical pads while reporting a full plot at three reads as a broken purchase.
+	baseSlots = 12,
 	maxSlots = 12,
 
 	--[[
@@ -51,6 +53,7 @@ local Economy = {
 		costGrowth = 1.4,
 		costFactor = 0.75,
 		maxLevel = 8,
+		cooldownSeconds = 0.5,
 	} :: UpgradeParams,
 
 	collect = {

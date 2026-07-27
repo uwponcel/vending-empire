@@ -111,6 +111,7 @@ describe("ProfileSchema.migrate", function()
 		}
 
 		local data: any = ProfileSchema.template(100, 3)
+		data.version = 1
 		local applied = ProfileSchema.migrate(data, chain, 3)
 
 		expect(applied).toBe(2)
@@ -118,6 +119,34 @@ describe("ProfileSchema.migrate", function()
 		expect(trace).toEqual({ "1to2", "2to3" })
 		-- Proves the steps ran in sequence rather than concurrently or backwards.
 		expect(data.addedInV3).toBe("saw v2")
+	end)
+
+	it("unlocks every visible slot through the real migration chain", function()
+		local data = ProfileSchema.template(100, 12)
+		data.version = 1
+		data.slotsUnlocked = 3
+
+		expect(ProfileSchema.migrate(data)).toBe(2)
+		expect(data.version).toBe(ProfileSchema.VERSION)
+		expect(data.slotsUnlocked).toBe(12)
+	end)
+
+	it("unlocks version 2 profiles that already received the first-row migration", function()
+		local data = ProfileSchema.template(100, 12)
+		data.version = 2
+		data.slotsUnlocked = 4
+
+		expect(ProfileSchema.migrate(data)).toBe(1)
+		expect(data.slotsUnlocked).toBe(12)
+	end)
+
+	it("does not relock a profile that already had more slots", function()
+		local data = ProfileSchema.template(100, 12)
+		data.version = 2
+		data.slotsUnlocked = 16
+
+		ProfileSchema.migrate(data)
+		expect(data.slotsUnlocked).toBe(16)
 	end)
 
 	it("runs only the remaining steps when data is partway up the chain", function()
@@ -146,6 +175,7 @@ describe("ProfileSchema.migrate", function()
 			-- no [2]
 		}
 		local data: any = ProfileSchema.template(100, 3)
+		data.version = 1
 
 		expect(function()
 			ProfileSchema.migrate(data, chain, 4)
@@ -179,6 +209,7 @@ describe("ProfileSchema.migrate", function()
 			end,
 		}
 		local data: any = ProfileSchema.template(100, 3)
+		data.version = 1
 		data.coins = 4321
 		table.insert(
 			data.machines,

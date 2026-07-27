@@ -15,6 +15,7 @@ local Version = require(Shared:WaitForChild("Version"))
 
 local Net = script:WaitForChild("Net")
 local Services = script:WaitForChild("Services")
+local AnalyticsService = require(Services.AnalyticsService)
 local DataService = require(Services.DataService)
 local MachineService = require(Services.MachineService)
 local PlotService = require(Services.PlotService)
@@ -32,6 +33,7 @@ local function start(): ()
 	]]
 	Remotes.verify()
 
+	AnalyticsService.start()
 	-- DataService first: it connects PlayerAdded, and anything that needs a profile waits
 	-- on it rather than loading its own session.
 	DataService.start()

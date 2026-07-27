@@ -23,6 +23,7 @@ local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local AnalyticsService = require(script.Parent.AnalyticsService)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local MachineModel = require(script.Parent.MachineModel)
@@ -38,6 +39,7 @@ local PlotLayout = require(Shared.Lib.PlotLayout)
 local PlotState = require(Shared.Lib.PlotState)
 local ProfileSchema = require(Shared.Lib.ProfileSchema)
 local Result = require(Shared.Lib.Result)
+local UpgradeCurve = require(Shared.Lib.UpgradeCurve)
 
 --[[
 	Slack on the server's distance check, in studs.
@@ -64,6 +66,7 @@ MachineService.Rejection = {
 	notOwner = "not_owner",
 	tooFar = "too_far",
 	nothingToCollect = "nothing_to_collect",
+	upgradeCooldown = "upgrade_cooldown",
 }
 
 --[[
@@ -78,6 +81,8 @@ local builtOnPlot: { [Player]: number? } = {}
 
 --- Last collect per machine, keyed by player then slot. os.clock, never persisted.
 local lastCollectClock: { [Player]: { [number]: number } } = {}
+--- Last upgrade attempt per machine, keyed by player then slot. os.clock, never persisted.
+local lastUpgradeClock: { [Player]: { [number]: number } } = {}
 
 local function slotCount(): number
 	return PlotLayout.slotCount(Plots)
@@ -191,6 +196,7 @@ function MachineService.buy(
 
 	print(`[MachineService] {player.Name} bought {typeId} on slot {slot} of plot {plotIndex}`)
 	Sync.push(player)
+	AnalyticsService.machineBought(player)
 
 	return Result.ok(record)
 end
@@ -206,6 +212,121 @@ local function distanceTo(player: Player, model: Model): number?
 	end
 
 	return (root.Position - body.Position).Magnitude
+end
+
+--[[
+	Upgrades one owned machine by one level.
+
+	The client sends the level it saw, not the level it wants. PlotState compares that value
+	to the saved record so two queued requests cannot both spend against one displayed price.
+	All checks and the mutation are synchronous, matching the purchase transaction.
+]]
+function MachineService.upgrade(
+	player: Player,
+	slot: number,
+	expectedLevel: number
+): Result.Result<ProfileSchema.MachineRecord>
+	local profile = DataService.get(player)
+	if profile == nil then
+		return Result.err(MachineService.Rejection.noProfile)
+	end
+
+	local plotIndex = builtOnPlot[player]
+	if plotIndex == nil then
+		return Result.err(MachineService.Rejection.noPlot)
+	end
+
+	local data: ProfileSchema.Data = profile.Data
+	local record = PlotState.atSlot(data.machines, slot)
+	local config = record and Machines.byId[record.typeId]
+	if record == nil or config == nil then
+		local rejection = PlotState.upgradeRejection(
+			data,
+			slot,
+			expectedLevel,
+			slotCount(),
+			0,
+			Economy.upgrade.maxLevel
+		)
+		return Result.err(rejection or MachineService.Rejection.unknownMachine)
+	end
+
+	local canUpgrade = UpgradeCurve.canUpgrade(record.level, Economy.upgrade)
+	local cost = if canUpgrade
+		then UpgradeCurve.upgradeCost(config.cost, record.level, Economy.upgrade)
+		else 0
+	local rejection = PlotState.upgradeRejection(
+		data,
+		slot,
+		expectedLevel,
+		slotCount(),
+		cost,
+		Economy.upgrade.maxLevel
+	)
+	if rejection then
+		return Result.err(rejection)
+	end
+
+	local model = MachineModel.find(plotIndex, slot)
+	if model == nil then
+		return Result.err(MachineService.Rejection.unknownMachine)
+	end
+
+	local distance = distanceTo(player, model)
+	if distance == nil or distance > Economy.collect.rangeStuds + DISTANCE_TOLERANCE_STUDS then
+		return Result.err(MachineService.Rejection.tooFar)
+	end
+
+	local clocks = lastUpgradeClock[player]
+	if clocks == nil then
+		clocks = {}
+		lastUpgradeClock[player] = clocks
+	end
+
+	local now = os.clock()
+	local previous = clocks[slot]
+	if previous ~= nil and now - previous < Economy.upgrade.cooldownSeconds then
+		return Result.err(MachineService.Rejection.upgradeCooldown)
+	end
+	clocks[slot] = now
+
+	local upgradedLevel = record.level + 1
+	local currentEffective =
+		UpgradeCurve.effective(config, record.level, Economy.upgrade, data.prestige.multiplier)
+	local effective =
+		UpgradeCurve.effective(config, upgradedLevel, Economy.upgrade, data.prestige.multiplier)
+	local rebasedLastCollectAt = Accrual.rebaseLastCollectAt(
+		currentEffective.rate,
+		currentEffective.capacity,
+		record.lastCollectAt,
+		effective.rate,
+		os.time()
+	)
+
+	local debited =
+		EconomyService.debit(player, cost, `upgrade:{record.typeId}:level:{upgradedLevel}`)
+	if debited.tag == "err" then
+		return Result.err(debited.reason)
+	end
+
+	record.lastCollectAt = rebasedLastCollectAt
+	record.level = upgradedLevel
+	MachineModel.applyState(
+		model,
+		record.level,
+		effective.rate,
+		effective.capacity,
+		record.lastCollectAt
+	)
+
+	print(
+		`[MachineService] {player.Name} upgraded {record.typeId} on slot {slot} `
+			.. `to level {record.level}`
+	)
+	Sync.push(player)
+	AnalyticsService.upgraded(player)
+
+	return Result.ok(record)
 end
 
 local function onCollect(player: Player, model: Model): Result.Result<number>
@@ -269,6 +390,7 @@ local function onCollect(player: Player, model: Model): Result.Result<number>
 		record.lastCollectAt
 	)
 	Sync.push(player)
+	AnalyticsService.collected(player)
 
 	return Result.ok(collected.amount)
 end
@@ -374,6 +496,7 @@ local function onPlayerRemoving(player: Player): ()
 
 	builtOnPlot[player] = nil
 	lastCollectClock[player] = nil
+	lastUpgradeClock[player] = nil
 end
 
 function MachineService.start(): ()

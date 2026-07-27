@@ -49,6 +49,9 @@ PlotState.Rejection = {
 	slotOutOfRange = "slot_out_of_range",
 	slotLocked = "slot_locked",
 	slotTaken = "slot_taken",
+	machineNotFound = "machine_not_found",
+	levelMismatch = "level_mismatch",
+	maxLevel = "max_level",
 	insufficientFunds = "insufficient_funds",
 }
 
@@ -121,6 +124,45 @@ function PlotState.purchaseRejection(
 		return PlotState.Rejection.slotTaken
 	end
 	if state.coins < machine.cost then
+		return PlotState.Rejection.insufficientFunds
+	end
+	return nil
+end
+
+--[[
+	Why an upgrade is not allowed, or nil when it is.
+
+	`expectedLevel` is the level the client saw when it asked. Matching it prevents two
+	queued clicks from buying two upgrades against one displayed price: the first succeeds
+	and advances the record, then the second is rejected as stale.
+
+	The caller derives `upgradeCost` and `maxLevel` from UpgradeCurve. Passing those values
+	in keeps this module pure while leaving all state-dependent rules in one testable place.
+]]
+function PlotState.upgradeRejection(
+	state: State,
+	slot: number,
+	expectedLevel: number,
+	slotCount: number,
+	upgradeCost: number,
+	maxLevel: number
+): string?
+	if slot % 1 ~= 0 or slot < 1 or slot > slotCount then
+		return PlotState.Rejection.slotOutOfRange
+	end
+
+	local record = PlotState.atSlot(state.machines, slot)
+	if record == nil then
+		return PlotState.Rejection.machineNotFound
+	end
+
+	if expectedLevel % 1 ~= 0 or expectedLevel ~= record.level then
+		return PlotState.Rejection.levelMismatch
+	end
+	if record.level >= maxLevel then
+		return PlotState.Rejection.maxLevel
+	end
+	if state.coins < upgradeCost then
 		return PlotState.Rejection.insufficientFunds
 	end
 	return nil

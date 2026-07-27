@@ -61,6 +61,8 @@ local Remotes = {}
 export type Names = {
 	--- Client to server: `BuyMachine`. A nil slot means "pick the lowest free one for me".
 	buyMachine: string,
+	--- Client to server: `UpgradeMachine`. Carries a slot and the level the client saw.
+	upgradeMachine: string,
 	--- Server to client: `Snapshot`.
 	sync: string,
 	--- Server to client: `Notice`. A rejection code, for the client to turn into copy.
@@ -69,6 +71,7 @@ export type Names = {
 
 local names: Names = {
 	buyMachine = "BuyMachine",
+	upgradeMachine = "UpgradeMachine",
 	sync = "Sync",
 	notice = "Notice",
 }
@@ -78,6 +81,12 @@ Remotes.names = names
 export type BuyMachine = {
 	typeId: string,
 	slot: number?,
+}
+
+export type UpgradeMachine = {
+	slot: number,
+	--- Current level from the client's replicated model, used as a stale-request guard.
+	level: number,
 }
 
 --[[
@@ -146,6 +155,7 @@ function Remotes.verify(): Folder
 	end
 
 	expectRemote(folder, names.buyMachine)
+	expectRemote(folder, names.upgradeMachine)
 	expectRemote(folder, names.sync)
 	expectRemote(folder, names.notice)
 

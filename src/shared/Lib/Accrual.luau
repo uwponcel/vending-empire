@@ -29,6 +29,8 @@
 
 local Accrual = {}
 
+local LOG_2 = math.log(2)
+
 export type Collected = {
 	--- Whole coins to credit. Always an integer, never negative.
 	amount: number,
@@ -79,14 +81,61 @@ function Accrual.collect(
 	local raw = rate * elapsed
 
 	if raw >= capacity then
-		-- Rule 2: the machine was full, the overflow is gone, accrual restarts now.
-		return { amount = math.floor(capacity), lastCollectAt = now }
+		-- Rule 2: overflow is gone, but a fractional capacity is still earned value. Carry
+		-- that fraction into the next cycle while paying only whole coins now.
+		local amount = math.floor(capacity)
+		local remainder = capacity - amount
+		return { amount = amount, lastCollectAt = now - remainder / rate }
 	end
 
 	-- Rule 1: advance only by the time actually paid for, so the unpaid fraction of a
 	-- coin is still there on the next collect.
 	local amount = math.floor(raw)
 	return { amount = amount, lastCollectAt = lastCollectAt + amount / rate }
+end
+
+local function timestampQuantum(value: number): number
+	local magnitude = math.max(1, math.abs(value))
+	local exponent = math.floor(math.log(magnitude) / LOG_2)
+	return 2 ^ (exponent - 52)
+end
+
+--[[
+	Moves an accrual timestamp from one rate to another without changing the coins already
+	waiting.
+
+	An upgrade must not apply its higher rate to time that elapsed before the purchase. The
+	timestamp may be fractional, just like the value returned by `collect`, so both whole
+	coins and the unpaid fraction carry across exactly.
+]]
+function Accrual.rebaseLastCollectAt(
+	oldRate: number,
+	oldCapacity: number,
+	lastCollectAt: number,
+	newRate: number,
+	now: number
+): number
+	assertRate(oldRate)
+	assertRate(newRate)
+
+	local elapsed = math.max(0, now - lastCollectAt)
+	local accrued = math.min(oldCapacity, oldRate * elapsed)
+	if accrued <= 0 then
+		return now
+	end
+
+	-- At epoch-sized timestamps, adding a fixed epsilon smaller than the float spacing does
+	-- nothing. Keep the reconstructed value safely inside the same whole-coin interval by a
+	-- margin derived from the timestamp's actual representable quantum.
+	local whole = math.floor(accrued)
+	local margin = newRate * timestampQuantum(now) * 2
+	if margin >= 0.5 then
+		error(`rate {newRate} is too large to preserve whole-coin accrual at timestamp {now}`, 2)
+	end
+
+	local fraction = accrued - whole
+	local preserved = whole + math.clamp(fraction, margin, 1 - margin)
+	return now - preserved / newRate
 end
 
 --[[

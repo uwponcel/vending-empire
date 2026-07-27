@@ -27,7 +27,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Economy = require(Shared.Config.Economy)
 local Machines = require(Shared.Config.Machines)
 local Plots = require(Shared.Config.Plots)
+local Format = require(Shared.Lib.Format)
 local PlotLayout = require(Shared.Lib.PlotLayout)
+local UpgradeCurve = require(Shared.Lib.UpgradeCurve)
 
 --- Body dimensions in studs. Narrower than the 14 stud slot spacing so two neighbouring
 --- machines leave a gap wide enough to walk between.
@@ -92,6 +94,24 @@ function MachineModel.prompt(model: Model): ProximityPrompt?
 	return prompt
 end
 
+local function configureUpgradePrompt(
+	prompt: ProximityPrompt,
+	config: Machines.Machine,
+	level: number
+): ()
+	prompt.ObjectText = config.displayName
+
+	if not UpgradeCurve.canUpgrade(level, Economy.upgrade) then
+		prompt.ActionText = "Max level"
+		prompt.Enabled = false
+		return
+	end
+
+	local cost = UpgradeCurve.upgradeCost(config.cost, level, Economy.upgrade)
+	prompt.ActionText = `Upgrade {Format.short(cost)}`
+	prompt.Enabled = true
+end
+
 --[[
 	Writes the live numbers onto the model.
 
@@ -110,6 +130,24 @@ function MachineModel.applyState(
 	model:SetAttribute("Rate", rate)
 	model:SetAttribute("Capacity", capacity)
 	model:SetAttribute("LastCollectAt", lastCollectAt)
+
+	local typeId = model:GetAttribute("TypeId")
+	local config = if type(typeId) == "string" then Machines.byId[typeId] else nil
+	if config == nil then
+		return
+	end
+
+	local body = model:FindFirstChild("Body")
+	local upgradePrompt = body and body:FindFirstChild("UpgradePrompt")
+	if upgradePrompt and upgradePrompt:IsA("ProximityPrompt") then
+		configureUpgradePrompt(upgradePrompt, config, level)
+	end
+
+	local billboard = body and body:FindFirstChild("Label")
+	local name = billboard and billboard:FindFirstChild("MachineName")
+	if name and name:IsA("TextLabel") then
+		name.Text = `{config.displayName} · Lv. {level}`
+	end
 end
 
 local function buildBody(spec: Spec): Part
@@ -145,7 +183,19 @@ local function buildBody(spec: Spec): Part
 	prompt.MaxActivationDistance = Economy.collect.rangeStuds
 	-- Machines stand in a grid and shadow each other from most angles.
 	prompt.RequiresLineOfSight = false
+	prompt.Style = Enum.ProximityPromptStyle.Custom
 	prompt.Parent = body
+
+	local upgradePrompt = Instance.new("ProximityPrompt")
+	upgradePrompt.Name = "UpgradePrompt"
+	upgradePrompt.KeyboardKeyCode = Enum.KeyCode.Q
+	upgradePrompt.GamepadKeyCode = Enum.KeyCode.ButtonY
+	upgradePrompt.HoldDuration = 0
+	upgradePrompt.MaxActivationDistance = Economy.collect.rangeStuds
+	upgradePrompt.RequiresLineOfSight = false
+	upgradePrompt.Style = Enum.ProximityPromptStyle.Custom
+	configureUpgradePrompt(upgradePrompt, spec.config, spec.level)
+	upgradePrompt.Parent = body
 
 	return body
 end
@@ -186,7 +236,7 @@ local function buildLabel(spec: Spec, body: Part): BillboardGui
 	name.TextScaled = true
 	name.TextColor3 = TEXT_COLOR
 	name.TextStrokeTransparency = 0.4
-	name.Text = spec.config.displayName
+	name.Text = `{spec.config.displayName} · Lv. {spec.level}`
 	name.Parent = billboard
 
 	local pending = Instance.new("TextLabel")
@@ -230,7 +280,6 @@ function MachineModel.build(spec: Spec): Model?
 	model:SetAttribute("Slot", spec.slot)
 	model:SetAttribute("TypeId", spec.config.id)
 	model:SetAttribute("OwnerUserId", spec.ownerUserId)
-	MachineModel.applyState(model, spec.level, spec.rate, spec.capacity, spec.lastCollectAt)
 
 	local body = buildBody(spec)
 	body.Parent = model
@@ -238,6 +287,7 @@ function MachineModel.build(spec: Spec): Model?
 
 	buildPanel(body).Parent = model
 	buildLabel(spec, body)
+	MachineModel.applyState(model, spec.level, spec.rate, spec.capacity, spec.lastCollectAt)
 
 	model.Parent = plot
 	return model
