@@ -142,16 +142,23 @@ local function build(): ()
 			Image = Icons.money,
 			ScaleType = Enum.ScaleType.Fit,
 		}),
+		-- Uppercase black with an outline, the same voice as every other label in the interface.
 		create("TextLabel", {
 			Name = "Caption",
 			Size = UDim2.new(1, -58, 0, 16),
-			Position = UDim2.fromOffset(48, 6),
+			Position = UDim2.fromOffset(48, 5),
 			BackgroundTransparency = 1,
-			Font = Enum.Font.GothamMedium,
-			TextSize = 10,
+			Font = Enum.Font.GothamBlack,
+			TextSize = 11,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = MUTED,
 			Text = "COINS",
+		}, {
+			create("UIStroke", {
+				Thickness = 2,
+				Color = Color3.fromRGB(30, 34, 44),
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+			}),
 		}),
 		label,
 	})

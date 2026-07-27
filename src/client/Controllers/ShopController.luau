@@ -100,6 +100,9 @@ local ART_HEIGHT = 92
 ]]
 local SUNBURST_DIAMETER = 140
 
+--- Close button diameter. Sized to sit inside the header row beside the title, not to shout.
+local CLOSE_SIZE = 30
+
 local TOAST_SECONDS = 2.5
 
 local ShopController = {}
@@ -259,16 +262,28 @@ local function buildCard(config: Machines.Machine): TextButton
 	artFrame.Size = UDim2.new(1, -20, 0, ART_HEIGHT)
 	artFrame.Position = UDim2.fromOffset(10, ART_TOP)
 
+	--[[
+		Rate and capacity are the numbers a player actually compares between two machines, so they
+		get the same outlined treatment as the title rather than being dimmed supporting text.
+
+		The first pass had them at 11px and 15% transparent, which disappeared into the sunburst
+		behind them.
+	]]
 	local detail = create("TextLabel", {
 		Name = "Detail",
-		Size = UDim2.new(1, -16, 0, 14),
-		Position = UDim2.fromOffset(8, 138),
+		Size = UDim2.new(1, -16, 0, 18),
+		Position = UDim2.fromOffset(8, 136),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		TextSize = 11,
+		Font = Enum.Font.GothamBlack,
+		TextSize = 13,
 		TextColor3 = SNOW,
-		TextTransparency = 0.15,
 		Text = "",
+	}, {
+		create("UIStroke", {
+			Thickness = 2,
+			Color = OUTLINE,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		}),
 	}) :: TextLabel
 
 	local pillIcon = create("ImageLabel", {
@@ -458,22 +473,49 @@ local function buildPanel(onClose: () -> ()): Frame
 		A panel this big needs an exit that is found without looking, and the launcher toggling it
 		shut is not discoverable once the panel has covered the launcher's corner of the eye.
 	]]
+	--[[
+		The glyph is a child label filling the button, not the button's own Text.
+
+		A TextButton renders its own text against its content box, which its border stroke and
+		corner radius both participate in, and the X ended up sitting high and left of the circle's
+		true centre. A child label that fills the button centres against the button's full box
+		instead, which is the same box the circle is drawn in.
+	]]
+	local closeGlyph = create("TextLabel", {
+		Name = "Glyph",
+		Size = UDim2.fromScale(1, 1),
+		--[[
+			One pixel down, because Roblox centres the line box rather than the ink.
+
+			Measured: a 30px label holding "X" at TextSize 15 reports TextBounds of 6.7 by 14.7 and
+			so is centred with 7.7px of slack above and below. That 14.7 includes the descender
+			space the font reserves, which a capital X does not use, so the visible glyph sits
+			high inside its own box by about half a descender.
+		]]
+		Position = UDim2.fromOffset(0, 1),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBlack,
+		TextSize = 15,
+		TextColor3 = SNOW,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		Text = "X",
+	})
+
 	local close = create("TextButton", {
 		Name = "Close",
-		Size = UDim2.fromOffset(38, 38),
+		Size = UDim2.fromOffset(CLOSE_SIZE, CLOSE_SIZE),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 8),
+		Position = UDim2.new(1, -12, 0, 10),
 		BackgroundColor3 = RED,
 		BorderSizePixel = 0,
-		Font = Enum.Font.GothamBlack,
-		TextSize = 20,
-		TextColor3 = SNOW,
-		Text = "X",
+		Text = "",
 		AutoButtonColor = true,
 	}, {
 		-- Half the height, so the corner radius makes it an actual circle.
-		create("UICorner", { CornerRadius = UDim.new(0, 19) }),
+		create("UICorner", { CornerRadius = UDim.new(0, CLOSE_SIZE // 2) }),
 		outline(3),
+		closeGlyph,
 	}) :: TextButton
 	close.Activated:Connect(onClose)
 

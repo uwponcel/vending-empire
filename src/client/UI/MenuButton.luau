@@ -147,20 +147,30 @@ function MenuButton.create(config: Config): Handle
 		Name = "Tooltip",
 		--- Sized to its own text so a longer future label does not need a new number here.
 		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.fromOffset(0, 26),
+		Size = UDim2.fromOffset(0, 30),
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(1, 10, 0.5, 0),
 		BackgroundColor3 = TOOLTIP_INK,
 		BackgroundTransparency = 0.1,
 		BorderSizePixel = 0,
-		Font = Enum.Font.GothamBold,
-		TextSize = 13,
+		--[[
+			Uppercase black with an outline, matching every other title in the interface. Applied
+			here rather than at the call site so a launcher cannot be added with a tooltip in a
+			different voice.
+		]]
+		Font = Enum.Font.GothamBlack,
+		TextSize = 14,
 		TextColor3 = TOOLTIP_TEXT,
-		Text = config.tooltip,
+		Text = string.upper(config.tooltip),
 		Visible = false,
 		Parent = button,
 	}, {
 		create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+		create("UIStroke", {
+			Thickness = 2,
+			Color = OUTLINE_COLOR,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		}),
 		create("UIPadding", {
 			PaddingLeft = UDim.new(0, 10),
 			PaddingRight = UDim.new(0, 10),
