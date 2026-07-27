@@ -11,5 +11,9 @@
 local harness = require("./harness")
 
 require("./suites/version.spec")
+require("./suites/format.spec")
+require("./suites/accrual.spec")
+require("./suites/upgradecurve.spec")
+require("./suites/machines.spec")
 
 harness.finish()
