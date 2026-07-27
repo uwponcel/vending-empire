@@ -48,13 +48,17 @@ a protocol error on connect rather than an obvious version warning.
 ## Validation
 
 ```powershell
+./scripts/sync-agent-docs.ps1 -Check
 stylua --check src/ tests/
 selene src/
 lune run tests/run
 rojo build --output build/vending-empire.rbxl
 ```
 
-CI runs all four on every push and pull request to `main`.
+CI runs all five on every push and pull request to `main`.
+
+`AGENTS.md` is generated from `CLAUDE.md`, so agents that look for either filename get
+the same instructions. Edit `CLAUDE.md` and run `./scripts/sync-agent-docs.ps1`.
 
 ## Layout
 
