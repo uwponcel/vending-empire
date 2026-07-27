@@ -1,0 +1,9 @@
+std = "roblox"
+
+# tests/ runs under Lune, not Roblox, so it has a different global set.
+# It is verified by actually executing it rather than by linting.
+exclude = ["tests/**"]
+
+[rules]
+# Roblox code legitimately uses shadowing in nested callbacks.
+shadowing = "warn"

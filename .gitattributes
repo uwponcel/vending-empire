@@ -1,0 +1,14 @@
+# stylua.toml sets line_endings = "Unix". Without this file, Git would hand back
+# CRLF working copies on Windows and `stylua --check` would fail on a fresh clone
+# while passing in CI. Normalize everywhere instead.
+* text=auto eol=lf
+
+# Roblox and image formats are binary and must never be line-ending mangled.
+*.rbxm  binary
+*.rbxmx binary
+*.rbxl  binary
+*.rbxlx binary
+*.png   binary
+*.jpg   binary
+*.ogg   binary
+*.mp3   binary

@@ -1,0 +1,19 @@
+# Rojo build output
+/build/
+*.rbxl
+*.rbxlx
+*.rbxl.lock
+*.rbxlx.lock
+
+# Generated: `rojo sourcemap` output, consumed by luau-lsp
+/sourcemap.json
+
+# Generated: `selene generate-roblox-std` output
+/roblox.toml
+
+# Generated: `lune setup` type definitions
+/.lune/
+
+# Editor
+.vscode/settings.json
+.idea/
