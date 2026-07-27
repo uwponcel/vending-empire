@@ -2,7 +2,10 @@ std = "roblox"
 
 # tests/ runs under Lune, not Roblox, so it has a different global set.
 # It is verified by actually executing it rather than by linting.
-exclude = ["tests/**"]
+#
+# src/server/Packages/ is vendored third-party code. We do not own its style and must
+# not rewrite it, so linting it would only produce noise we are not allowed to fix.
+exclude = ["tests/**", "src/server/Packages/**"]
 
 [rules]
 # Roblox code legitimately uses shadowing in nested callbacks.

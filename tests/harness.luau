@@ -64,6 +64,12 @@ function harness.expect(actual: any)
 		end
 	end
 
+	function matchers.toNotBe(expected: any)
+		if actual == expected then
+			error(`expected something other than {describeValue(expected)}`, 2)
+		end
+	end
+
 	function matchers.toEqual(expected: any)
 		if not deepEqual(actual, expected) then
 			error(

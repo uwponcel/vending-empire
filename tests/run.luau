@@ -15,5 +15,7 @@ require("./suites/format.spec")
 require("./suites/accrual.spec")
 require("./suites/upgradecurve.spec")
 require("./suites/machines.spec")
+require("./suites/plotlayout.spec")
+require("./suites/profileschema.spec")
 
 harness.finish()
