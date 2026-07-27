@@ -150,7 +150,58 @@ source control instead of authoring it in Studio.
 an instance to the manifest does nothing until the server is restarted and the plugin
 reconnects. Source file edits sync normally without a restart.
 
+### Screenshots can beat replication
+
+`screen_capture` taken immediately after `start_stop_play` renders before the client has
+finished replicating. Two captures showed 2 and 4 plots on a map that programmatically had
+all 12. Confirm object counts with `execute_luau` against the `Client` datamodel before
+concluding anything is missing from a screenshot.
+
+## The Place
+
+| | |
+|---|---|
+| PlaceId | `119229638326166` |
+| UniverseId | `10580491481` |
+| Baseplate | 2048 studs square, not the 512 a default place suggests |
+
+World settings that must not drift live in `default.project.json`, not in Studio:
+
+- **`StreamingEnabled` is pinned off.** The map is 280 x 208 studs with under 200 parts, so
+  streaming buys nothing and only adds replication failure modes. It also has to stay off
+  for plots to be visible across the map, which is the comparison mechanic the design rests
+  on.
+- **Atmosphere density is 0.05.** The default 0.3 hid plots past roughly 200 studs on a grid
+  280 wide, so a player on one corner plot could not see the opposite corner.
+
+Pad colour is a functional requirement, not decoration. The first pass used a mid grey that
+matched the baseplate's value, making plots invisible from any distance no matter what the
+haze was doing.
+
 ## DataStores
 
-`ProfileStore` is vendored rather than pulled through Wally. DataStore calls fail silently
-in Studio unless Game Settings -> Security -> Enable Studio Access to API Services is on.
+`ProfileStore` is vendored rather than pulled through Wally, pinned to a commit, and
+excluded from both `stylua` and `selene` so it stays byte-identical to upstream. See
+`src/server/Packages/README.md`.
+
+DataStore calls fail silently in Studio unless Game Settings -> Security -> Enable Studio
+Access to API Services is on. `DataService.start` logs `ProfileStore.DataStoreState` at boot
+so a misconfigured place says `NoAccess` instead of looking like saves that do nothing.
+
+### Gapped numeric tables are silently truncated, not rejected
+
+ProfileStore's header warns that saving a numeric table with gaps "will result in an error".
+**It does not.** Measured directly against the live DataStore:
+
+| Saved shape | Result | Read back |
+|---|---|---|
+| `{ {slot=5,...}, {slot=1,...} }` | no error | intact, both records |
+| `{ [1]=..., [5]=... }` | no error | **only `[1]`, the slot 5 record is gone** |
+
+The serializer truncates at the first gap and reports nothing. This is why placed machines
+are a dense array where each record carries its own `slot`, and it is worse than an error
+would have been: a player owning slots 1 and 5 would silently lose a machine on every save
+with nothing in any log to trace.
+
+The same class of rule applies to the rest of saved data. No mixed tables, no userdata, no
+Instances, no functions. `receipts` is string-keyed for exactly this reason.
