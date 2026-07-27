@@ -2,10 +2,10 @@
 --[[
 	Assembles the world representation of a placed machine.
 
-	Built from primitives rather than an imported asset, deliberately. A machine is a box
-	with a coloured face, so authoring one in Studio would trade a source-controlled,
-	diffable definition for an opaque `.rbxm` and buy nothing in return. This is also what
-	keeps the art budget for a whole tier list at zero.
+	The Body part remains the invisible authoritative collider and prompt host. A separate,
+	non-colliding visual loads the machine-specific mesh and texture IDs from pure config.
+	Keeping the assets as source-controlled IDs avoids opaque place-only models while making
+	the art replaceable without touching gameplay state.
 
 	THE MODEL CARRIES ITS NUMBERS AS ATTRIBUTES, AND THAT IS THE POINT.
 
@@ -25,6 +25,7 @@ local PlotGeometry = require(script.Parent.PlotGeometry)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Economy = require(Shared.Config.Economy)
+local MachineVisuals = require(Shared.Config.MachineVisuals)
 local Machines = require(Shared.Config.Machines)
 local Plots = require(Shared.Config.Plots)
 local Format = require(Shared.Lib.Format)
@@ -200,6 +201,46 @@ local function buildBody(spec: Spec): Part
 	return body
 end
 
+local function buildVisual(spec: Spec, body: Part): Part?
+	local config = MachineVisuals.byId[spec.config.id]
+	if config == nil then
+		return nil
+	end
+
+	local scaledHeight = config.naturalSize.y * config.scale
+	local groundY = body.Position.Y - BODY_SIZE.Y / 2
+	local spawn = PlotLayout.spawnPosition(spec.plotIndex, Plots)
+	local basePosition = Vector3.new(body.Position.X, groundY + scaledHeight / 2, body.Position.Z)
+	local spawnFacing = CFrame.lookAt(basePosition, Vector3.new(spawn.x, basePosition.Y, spawn.z))
+		* CFrame.Angles(0, math.rad(180), 0)
+	local position = spawnFacing:PointToWorldSpace(
+		Vector3.new(config.offset.x, config.offset.y, config.offset.z)
+	)
+
+	local visual = Instance.new("Part")
+	visual.Name = "Visual"
+	visual.Anchored = true
+	visual.CanCollide = false
+	visual.CanQuery = false
+	visual.CanTouch = false
+	visual.CastShadow = true
+	visual.Size = Vector3.one
+	visual.Color = Color3.new(1, 1, 1)
+	visual.CFrame = CFrame.new(position)
+		* spawnFacing.Rotation
+		* CFrame.Angles(0, math.rad(config.yawDegrees), 0)
+
+	local mesh = Instance.new("SpecialMesh")
+	mesh.Name = "Mesh"
+	mesh.MeshType = Enum.MeshType.FileMesh
+	mesh.MeshId = config.meshId
+	mesh.TextureId = config.textureId
+	mesh.Scale = Vector3.new(config.scale, config.scale, config.scale)
+	mesh.Parent = visual
+
+	return visual
+end
+
 --- Dark inset panel on the +Z face, which is the side a player approaches from.
 local function buildPanel(body: Part): Part
 	local panel = Instance.new("Part")
@@ -285,7 +326,15 @@ function MachineModel.build(spec: Spec): Model?
 	body.Parent = model
 	model.PrimaryPart = body
 
-	buildPanel(body).Parent = model
+	local visual = buildVisual(spec, body)
+	if visual then
+		body.Transparency = 1
+		body.CastShadow = false
+		visual.Parent = model
+	else
+		buildPanel(body).Parent = model
+	end
+
 	buildLabel(spec, body)
 	MachineModel.applyState(model, spec.level, spec.rate, spec.capacity, spec.lastCollectAt)
 

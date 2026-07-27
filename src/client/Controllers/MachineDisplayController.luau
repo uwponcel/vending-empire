@@ -38,12 +38,32 @@ local PLOTS_FOLDER = "Plots"
 local READY_COLOR = Color3.fromRGB(163, 190, 140)
 local FILLING_COLOR = Color3.fromRGB(216, 222, 233)
 local PANEL_COLOR = Color3.fromRGB(46, 52, 64)
+local MESH_COLOR = Vector3.new(1, 1, 1)
+local MESH_READY_COLOR = Vector3.new(0.64, 0.75, 0.55)
 
 local MachineDisplayController = {}
 local lastCollectAtByModel: { [Model]: number } = {}
 local lastLevelByModel: { [Model]: number } = {}
 
 local function showRestock(model: Model): ()
+	local visual = model:FindFirstChild("Visual")
+	local mesh = visual and visual:FindFirstChild("Mesh")
+	if mesh and mesh:IsA("SpecialMesh") then
+		mesh.VertexColor = MESH_READY_COLOR
+
+		task.delay(0.08, function()
+			if mesh.Parent == nil then
+				return
+			end
+			TweenService:Create(
+				mesh,
+				TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+				{ VertexColor = MESH_COLOR }
+			):Play()
+		end)
+		return
+	end
+
 	local panel = model:FindFirstChild("Panel")
 	if panel == nil or not panel:IsA("BasePart") then
 		return

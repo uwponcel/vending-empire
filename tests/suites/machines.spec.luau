@@ -11,6 +11,7 @@
 
 local harness = require("../harness")
 local Machines = require("../../src/shared/Config/Machines")
+local MachineVisuals = require("../../src/shared/Config/MachineVisuals")
 local Economy = require("../../src/shared/Config/Economy")
 local UpgradeCurve = require("../../src/shared/Lib/UpgradeCurve")
 
@@ -65,6 +66,57 @@ describe("Machines table integrity", function()
 	it("has a non-empty display name for every machine", function()
 		for _, machine in Machines.list do
 			expect(#machine.displayName).toBeGreaterThan(0)
+		end
+	end)
+end)
+
+describe("Machine visual registry", function()
+	it("covers every configured machine and no unknown ids", function()
+		local machineCount = 0
+		for _, machine in Machines.list do
+			expect(MachineVisuals.byId[machine.id]).toNotBe(nil)
+			machineCount += 1
+		end
+
+		local visualCount = 0
+		for typeId in MachineVisuals.byId do
+			expect(Machines.byId[typeId]).toNotBe(nil)
+			visualCount += 1
+		end
+		expect(visualCount).toBe(machineCount)
+	end)
+
+	it("uses unique owned mesh and texture assets", function()
+		local meshIds = {}
+		local textureIds = {}
+
+		for _, visual in MachineVisuals.byId do
+			expect(string.sub(visual.meshId, 1, 13)).toBe("rbxassetid://")
+			expect(string.sub(visual.textureId, 1, 13)).toBe("rbxassetid://")
+			expect(meshIds[visual.meshId]).toBe(nil)
+			expect(textureIds[visual.textureId]).toBe(nil)
+			meshIds[visual.meshId] = true
+			textureIds[visual.textureId] = true
+		end
+	end)
+
+	it("keeps normalized visuals inside the slot footprint", function()
+		for _, visual in MachineVisuals.byId do
+			local width = visual.naturalSize.x * visual.scale
+			local height = visual.naturalSize.y * visual.scale
+			local depth = visual.naturalSize.z * visual.scale
+
+			expect(width).toBeGreaterThan(0)
+			expect(height).toBeGreaterThan(5)
+			expect(height).toBeLessThan(8)
+			expect(width).toBeLessThan(8)
+			expect(depth).toBeLessThan(4)
+		end
+	end)
+
+	it("uses quarter-turn yaw values so fronts stay predictable", function()
+		for _, visual in MachineVisuals.byId do
+			expect(visual.yawDegrees % 90).toBe(0)
 		end
 	end)
 end)
