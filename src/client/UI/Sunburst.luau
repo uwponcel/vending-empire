@@ -1,33 +1,50 @@
 --!strict
 --[[
-	The slowly rotating aura behind a product card's artwork.
+	A static starburst that sits behind a product card's artwork to highlight it.
 
-	Purely decorative, and it earns its place by doing one job: it puts a moving bright centre
-	behind the product so the eye lands on the thing being sold rather than on the card's edges.
-	Every storefront in the genre uses it for exactly that reason.
+	Purely decorative, and it earns its place by doing one job: it puts a bright point behind the
+	product so the eye lands on the thing being sold rather than on the card's edges.
 
-	Built from rotated rectangles rather than an image, because there is no sunburst in the icon
-	pack and inventing an asset id is worse than drawing it.
+	Built from rectangles rather than an image, because there is no sunburst in the icon pack and
+	inventing an asset id is worse than drawing it.
 
-	RAYS EMANATE FROM THE CENTRE, THEY DO NOT CROSS IT.
+	IT DOES NOT ROTATE, AND IT DOES NOT ORBIT.
 
-	The first version used full-length rectangles through the middle, so eight rays at 55%
-	transparency overlapped eight deep at the centre. Transparency composites, so the middle
-	went nearly opaque: a hard white star sitting on the card instead of a glow behind the
-	product. Anchoring each ray at its base and pointing it outward means rays only meet at a
-	single point, and the centre stays as light as one ray.
+	A spinning version read as a fan wheel turning next to the machine rather than light behind
+	it, which is worse than no effect at all. The rays hold their angles; what animates is their
+	brightness, as a wave travelling around the ring so rays fade up and down in succession.
+
+	The wave is a transparency ramp rather than toggling `Visible`. Flicking rays on and off is a
+	rapid flash, which the accessibility rules in PRODUCT.md rule out, and it strobes where a ramp
+	shimmers. Under `GuiService.ReducedMotionEnabled` the rays hold a steady mid brightness.
+
+	THERE IS A HOLE IN THE MIDDLE, AND IT IS LOAD BEARING.
+
+	Rays start at `INNER_RADIUS_SCALE` of the radius, not at the centre. Sixteen semi-transparent
+	rays meeting at one point still composite sixteen deep across those few pixels, which put a
+	hard bright dot over the very thing the burst is meant to highlight. Starting them out from
+	the centre means no ray overlaps another anywhere, and the product sits in clear space.
+
+	EVERY RAY'S CENTRE IS PLACED WITH TRIG, NOT WITH AN ANCHOR PLUS A ROTATION.
+
+	The orbiting version anchored each ray at its base and leaned on `Rotation` pivoting about
+	`AnchorPoint`. It does not reliably, so the rays swept around a point that was not the centre
+	of the burst and the whole thing sat off to one side of the artwork.
+
+	Each ray now has `AnchorPoint` at its own centre, and that centre is positioned half a ray
+	length out along its angle. With the anchor at the centre, both possible pivot rules agree, so
+	the inner end of every ray lands on the burst's centre no matter how Roblox interprets it.
 
 	CONTAINMENT IS GEOMETRIC, NOT CLIPPED, AND IT HAS TO BE.
 
 	`ClipsDescendants` does not clip a rotated descendant, and every ray here is rotated, so a
-	clip on the container is silently ignored. Instead every ray is at most `radius` long and
-	pinned to the centre, which keeps its tip inside the circle of that radius at any rotation,
-	including the container's own. **The caller must give this a container that fits inside its
-	card**, because nothing here can stop a ray leaving a container that is already too big.
+	clip on the container is silently ignored. Instead no ray reaches further than `radius` from
+	the centre. **The caller must give this a container that fits inside its card**, because
+	nothing here can stop a ray leaving a container that is already too big.
 
-	The rays are a lightened version of the card's own colour, never a fixed white. On a
-	saturated card a white ray reads as a hole punched through it; a lightened one reads as light
-	coming from behind the product.
+	The rays are a lightened version of the card's own colour, never a fixed white. On a saturated
+	card a white ray reads as a hole punched through it; a lightened one reads as light coming
+	from behind the product.
 ]]
 
 local GuiService = game:GetService("GuiService")
@@ -35,63 +52,78 @@ local RunService = game:GetService("RunService")
 
 local create = require(script.Parent.create)
 
---[[
-	Twelve spokes rather than eight. Each covers one direction now instead of two, so the same
-	visual density needs more of them, and thinner rays read as a burst where fat ones read as a
-	pinwheel.
-]]
-local RAY_COUNT = 12
+--- Rays alternate long and short, so this is even.
+local RAY_COUNT = 16
 --- Fraction of the container's width taken by one ray.
-local RAY_WIDTH_SCALE = 0.1
+local RAY_WIDTH_SCALE = 0.075
 --[[
-	Half the container, so a ray reaches from the centre to the edge and no further. This is the
-	bound that keeps a rotated ray inside the container; raising it puts rays outside the card,
-	where nothing will clip them.
+	Alternating lengths as a fraction of the radius. A burst of equal-length spokes reads as a
+	mechanical fan; uneven ones read as light. The longer value is 1, meaning a ray reaches the
+	container edge and no further, which is what bounds the whole thing.
 ]]
-local RAY_LENGTH_SCALE = 0.5
-local RAY_LIGHTEN = 0.3
---- High, because the eye should read a glow rather than count spokes.
-local RAY_TRANSPARENCY = 0.72
+local RAY_LONG = 1
+local RAY_SHORT = 0.62
 
---- Degrees per second. Slow enough to feel like ambience, not slow enough to look frozen.
-local SPIN_DEGREES_PER_SECOND = 18
+--- Where a ray starts, as a fraction of the radius. Keeps the centre clear. See the header.
+local INNER_RADIUS_SCALE = 0.2
+
+local RAY_LIGHTEN = 0.34
+--- Dimmest and brightest points of the sparkle. Both high: a glow, not countable spokes.
+local TRANSPARENCY_DIM = 0.9
+local TRANSPARENCY_BRIGHT = 0.56
+--- Held when the player has asked for reduced motion.
+local TRANSPARENCY_STILL = 0.76
+
+--- Full trips of the wave around the ring per second. Slow enough to shimmer, not blink.
+local WAVE_CYCLES_PER_SECOND = 0.45
 
 local Sunburst = {}
 
 --[[
-	One shared spin loop for every burst on screen.
+	One shared sparkle loop for every burst on screen.
 
-	A connection per card would be nine connections doing one float add each, which is cheap but
-	pointless when a single pass over a list does the same work and cannot leak a connection when
-	a card is destroyed.
+	A connection per card would be nine connections doing the same trig, and each would have to be
+	disconnected when its card died. One pass over a list cannot leak.
 ]]
-local spinning: { Frame } = {}
-local spinConnection: RBXScriptConnection? = nil
+local sparkling: { Frame } = {}
+local sparkleConnection: RBXScriptConnection? = nil
 
-local function ensureSpinning(): ()
-	if spinConnection ~= nil then
+local function ensureSparkling(): ()
+	if sparkleConnection ~= nil then
 		return
 	end
 
-	spinConnection = RunService.Heartbeat:Connect(function(delta: number)
+	sparkleConnection = RunService.Heartbeat:Connect(function()
 		--[[
 			Checked every frame rather than once at creation, because it is a live accessibility
-			setting the player can change without rejoining. The burst simply stops where it is.
+			setting the player can change without rejoining.
 		]]
-		if GuiService.ReducedMotionEnabled then
-			return
-		end
+		local reduced = GuiService.ReducedMotionEnabled
+		-- os.clock is right here: this drives one frame of animation and is never persisted.
+		local phase = os.clock() * WAVE_CYCLES_PER_SECOND * math.pi * 2
 
-		local step = SPIN_DEGREES_PER_SECOND * delta
-
-		-- Backwards, so removing a destroyed entry cannot skip the next one.
-		for index = #spinning, 1, -1 do
-			local frame = spinning[index]
+		for index = #sparkling, 1, -1 do
+			local frame = sparkling[index]
 			if frame.Parent == nil then
-				table.remove(spinning, index)
-			else
-				-- Wrapped, so Rotation never grows without bound over a long session.
-				frame.Rotation = (frame.Rotation + step) % 360
+				table.remove(sparkling, index)
+				continue
+			end
+
+			for rayIndex, ray in frame:GetChildren() do
+				if not ray:IsA("Frame") then
+					continue
+				end
+
+				if reduced then
+					ray.BackgroundTransparency = TRANSPARENCY_STILL
+					continue
+				end
+
+				-- One full wave spread across the ring, so brightness travels around it.
+				local offset = (rayIndex - 1) / RAY_COUNT * math.pi * 2
+				local brightness = 0.5 + 0.5 * math.sin(phase + offset)
+				ray.BackgroundTransparency = TRANSPARENCY_DIM
+					+ (TRANSPARENCY_BRIGHT - TRANSPARENCY_DIM) * brightness
 			end
 		end
 	end)
@@ -108,25 +140,41 @@ end
 	card decides.
 ]]
 function Sunburst.create(color: Color3, diameter: number, center: Vector2): Frame
+	local radius = diameter / 2
+	local width = diameter * RAY_WIDTH_SCALE
+	local rayColor = color:Lerp(Color3.new(1, 1, 1), RAY_LIGHTEN)
+
 	local rays: { Instance } = {}
 
+	local inner = radius * INNER_RADIUS_SCALE
+
 	for index = 1, RAY_COUNT do
+		local degrees = (index - 1) * (360 / RAY_COUNT)
+		local outer = radius * (if index % 2 == 1 then RAY_LONG else RAY_SHORT)
+		local length = outer - inner
+
+		--[[
+			Centred at the midpoint between the inner and outer ends along the ray's own angle, so
+			the ray spans exactly `inner` to `outer` from the burst centre.
+
+			Screen y grows downward, hence the negated cosine. Zero degrees points straight up,
+			which only matters for reading the code; the result is symmetric either way.
+		]]
+		local radians = math.rad(degrees)
+		local distance = inner + length / 2
+		local offsetX = math.sin(radians) * distance
+		local offsetY = -math.cos(radians) * distance
+
 		table.insert(
 			rays,
 			create("Frame", {
 				Name = `Ray{index}`,
-				--[[
-					Anchored at the base and placed at the centre. Roblox rotates a GuiObject about
-					its AnchorPoint, so each ray pivots around the centre of the burst and sweeps
-					outward rather than spinning about its own middle.
-				]]
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromScale(RAY_WIDTH_SCALE, RAY_LENGTH_SCALE),
-				-- Full circle, because a ray now covers one direction rather than two.
-				Rotation = (index - 1) * (360 / RAY_COUNT),
-				BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), RAY_LIGHTEN),
-				BackgroundTransparency = RAY_TRANSPARENCY,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(0.5, offsetX, 0.5, offsetY),
+				Size = UDim2.fromOffset(width, length),
+				Rotation = degrees,
+				BackgroundColor3 = rayColor,
+				BackgroundTransparency = TRANSPARENCY_STILL,
 				BorderSizePixel = 0,
 			})
 		)
@@ -140,8 +188,8 @@ function Sunburst.create(color: Color3, diameter: number, center: Vector2): Fram
 		BackgroundTransparency = 1,
 	}, rays) :: Frame
 
-	table.insert(spinning, frame)
-	ensureSpinning()
+	table.insert(sparkling, frame)
+	ensureSparkling()
 
 	return frame
 end
