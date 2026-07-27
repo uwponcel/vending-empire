@@ -215,6 +215,17 @@ src/client/   -> StarterPlayerScripts.Client Controllers, UI
 tests/        Lune suites. Add a suite to the explicit list in tests/run.luau.
 ```
 
+## UI Icon Pack
+
+The purchased Simulator Icon Pack is catalogued in
+[`docs/icon-pack-reference.md`](docs/icon-pack-reference.md). It maps all 100 premium icons to
+visual descriptions and image asset ids, and records the smaller set currently assigned to
+product roles.
+
+Runtime code reads named roles from `src/shared/Config/Icons.luau`. Do not scatter raw image
+ids through controllers, and do not commit the purchased catalog model into the place. Keep
+text beside any icon whose meaning is not universal.
+
 ## Studio Workflow
 
 `rojo serve` syncs `src/` into the open Studio session. Verify live behavior through the

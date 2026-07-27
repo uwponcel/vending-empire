@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local create = require(script.Parent.Parent.UI.create)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Icons = require(Shared.Config.Icons)
 local Machines = require(Shared.Config.Machines)
 local Format = require(Shared.Lib.Format)
 local Remotes = require(Shared.Net.Remotes)
@@ -60,8 +61,16 @@ local ShopController = {}
 type Row = {
 	frame: Frame,
 	button: TextButton,
+	buyIcon: ImageLabel,
+	price: TextLabel,
 	detail: TextLabel,
 	category: Machines.Category,
+}
+
+type Toast = {
+	frame: Frame,
+	icon: ImageLabel,
+	label: TextLabel,
 }
 
 local snapshot: Remotes.Snapshot? = nil
@@ -69,7 +78,7 @@ local rows: { [string]: Row } = {}
 local tabs: { [Machines.Category]: TextButton } = {}
 local activeCategory: Machines.Category = "drinks"
 local list: ScrollingFrame? = nil
-local toast: TextLabel? = nil
+local toast: Toast? = nil
 local toastToken = 0
 
 local function corner(radius: number): Instance
@@ -77,21 +86,22 @@ local function corner(radius: number): Instance
 end
 
 local function showToast(message: string, isError: boolean): ()
-	local label = toast
-	if label == nil then
+	local current = toast
+	if current == nil then
 		return
 	end
 
 	toastToken += 1
 	local token = toastToken
 
-	label.Text = message
-	label.TextColor3 = if isError then RED else GREEN
-	label.Visible = true
+	current.label.Text = message
+	current.label.TextColor3 = if isError then RED else GREEN
+	current.icon.Image = if isError then Icons.error else Icons.success
+	current.frame.Visible = true
 
 	task.delay(TOAST_SECONDS, function()
 		if token == toastToken then
-			label.Visible = false
+			current.frame.Visible = false
 		end
 	end)
 end
@@ -131,9 +141,10 @@ local function refresh(): ()
 		end
 
 		local affordable = current.coins >= config.cost
-		row.button.Text = `Buy {Format.short(config.cost)}`
+		row.price.Text = `Buy {Format.short(config.cost)}`
 		row.button.BackgroundColor3 = if affordable then CATEGORY_COLOR[config.category] else MUTED
-		row.button.TextTransparency = if affordable then 0 else 0.35
+		row.price.TextTransparency = if affordable then 0 else 0.35
+		row.buyIcon.ImageTransparency = if affordable then 0 else 0.35
 		row.button.Active = affordable
 		row.button.AutoButtonColor = affordable
 
@@ -166,17 +177,35 @@ local function buildRow(config: Machines.Machine): Frame
 		Text = "",
 	}) :: TextLabel
 
-	local button = create("TextButton", {
-		Size = UDim2.fromOffset(92, 34),
-		Position = UDim2.new(1, -104, 0, 13),
-		BackgroundColor3 = CATEGORY_COLOR[config.category],
-		BorderSizePixel = 0,
+	local buyIcon = create("ImageLabel", {
+		Name = "Icon",
+		Size = UDim2.fromOffset(22, 22),
+		Position = UDim2.fromOffset(7, 6),
+		BackgroundTransparency = 1,
+		Image = Icons.buy,
+		ScaleType = Enum.ScaleType.Fit,
+	}) :: ImageLabel
+
+	local price = create("TextLabel", {
+		Name = "Price",
+		Size = UDim2.new(1, -36, 1, 0),
+		Position = UDim2.fromOffset(34, 0),
+		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
 		TextSize = 12,
+		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = SNOW,
 		Text = `Buy {Format.short(config.cost)}`,
+	}) :: TextLabel
+
+	local button = create("TextButton", {
+		Size = UDim2.fromOffset(100, 34),
+		Position = UDim2.new(1, -112, 0, 13),
+		BackgroundColor3 = CATEGORY_COLOR[config.category],
+		BorderSizePixel = 0,
+		Text = "",
 		AutoButtonColor = true,
-	}, { corner(7) }) :: TextButton
+	}, { corner(7), buyIcon, price }) :: TextButton
 
 	button.Activated:Connect(function()
 		Remotes.get(Remotes.names.buyMachine)
@@ -195,6 +224,8 @@ local function buildRow(config: Machines.Machine): Frame
 	rows[config.id] = {
 		frame = frame,
 		button = button,
+		buyIcon = buyIcon,
+		price = price,
 		detail = detail,
 		category = config.category,
 	}
@@ -266,8 +297,8 @@ local function buildPanel(): Frame
 	end
 
 	local title = create("TextLabel", {
-		Size = UDim2.new(1, -24, 0, 28),
-		Position = UDim2.fromOffset(12, 8),
+		Size = UDim2.new(1, -56, 0, 28),
+		Position = UDim2.fromOffset(44, 8),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
 		TextSize = 17,
@@ -285,7 +316,20 @@ local function buildPanel(): Frame
 		BackgroundTransparency = 0.06,
 		BorderSizePixel = 0,
 		Visible = false,
-	}, { corner(12), title, buildTabs(), machineList }) :: Frame
+	}, {
+		corner(12),
+		create("ImageLabel", {
+			Name = "ShopIcon",
+			Size = UDim2.fromOffset(26, 26),
+			Position = UDim2.fromOffset(12, 8),
+			BackgroundTransparency = 1,
+			Image = Icons.shop,
+			ScaleType = Enum.ScaleType.Fit,
+		}),
+		title,
+		buildTabs(),
+		machineList,
+	}) :: Frame
 
 	selectCategory(activeCategory)
 	return panel
@@ -310,32 +354,72 @@ local function build(): ()
 		Position = UDim2.new(0, 16, 1, -16),
 		BackgroundColor3 = CATEGORY_COLOR[activeCategory],
 		BorderSizePixel = 0,
-		Font = Enum.Font.GothamBold,
-		TextSize = 15,
-		TextColor3 = SNOW,
-		Text = "Shop",
+		Text = "",
 		Parent = gui,
-	}, { corner(10) }) :: TextButton
+	}, {
+		corner(10),
+		create("ImageLabel", {
+			Name = "Icon",
+			Size = UDim2.fromOffset(28, 28),
+			Position = UDim2.fromOffset(10, 8),
+			BackgroundTransparency = 1,
+			Image = Icons.shop,
+			ScaleType = Enum.ScaleType.Fit,
+		}),
+		create("TextLabel", {
+			Name = "Label",
+			Size = UDim2.new(1, -48, 1, 0),
+			Position = UDim2.fromOffset(44, 0),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamBold,
+			TextSize = 15,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = SNOW,
+			Text = "Shop",
+		}),
+	}) :: TextButton
 
 	toggle.Activated:Connect(function()
 		shopPanel.Visible = not shopPanel.Visible
 	end)
 
-	toast = create("TextLabel", {
+	local toastIcon = create("ImageLabel", {
+		Name = "Icon",
+		Size = UDim2.fromOffset(24, 24),
+		Position = UDim2.fromOffset(9, 5),
+		BackgroundTransparency = 1,
+		Image = Icons.error,
+		ScaleType = Enum.ScaleType.Fit,
+	}) :: ImageLabel
+
+	local toastLabel = create("TextLabel", {
+		Name = "Message",
+		Size = UDim2.new(1, -46, 1, 0),
+		Position = UDim2.fromOffset(42, 0),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = RED,
+		Text = "",
+	}) :: TextLabel
+
+	local toastFrame = create("Frame", {
 		Name = "Toast",
-		Size = UDim2.fromOffset(320, 34),
+		Size = UDim2.fromOffset(320, 36),
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -24),
 		BackgroundColor3 = INK,
 		BackgroundTransparency = 0.08,
 		BorderSizePixel = 0,
-		Font = Enum.Font.GothamMedium,
-		TextSize = 14,
-		TextColor3 = RED,
-		Text = "",
 		Visible = false,
 		Parent = gui,
-	}, { corner(8) }) :: TextLabel
+	}, { corner(8), toastIcon, toastLabel }) :: Frame
+	toast = {
+		frame = toastFrame,
+		icon = toastIcon,
+		label = toastLabel,
+	}
 end
 
 function ShopController.start(): ()

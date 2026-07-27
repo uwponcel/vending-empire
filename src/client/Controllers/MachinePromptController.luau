@@ -14,13 +14,17 @@ local Workspace = game:GetService("Workspace")
 
 local create = require(script.Parent.Parent.UI.create)
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Icons = require(Shared.Config.Icons)
+
 local INK = Color3.fromRGB(46, 52, 64)
 local SURFACE = Color3.fromRGB(59, 66, 82)
 local OUTLINE = Color3.fromRGB(94, 129, 172)
 local SNOW = Color3.fromRGB(236, 239, 244)
 
-local PANEL_WIDTH = 206
-local ROW_HEIGHT = 32
+local PANEL_WIDTH = 228
+local ROW_HEIGHT = 36
 local ROW_GAP = 5
 local PANEL_PADDING = 7
 
@@ -37,6 +41,11 @@ type ModelState = {
 }
 
 local states: { [Model]: ModelState? } = {}
+
+local ICON_BY_PROMPT: { [string]: string } = {
+	CollectPrompt = Icons.currency,
+	UpgradePrompt = Icons.upgrade,
+}
 
 local function corner(radius: number): Instance
 	return create("UICorner", { CornerRadius = UDim.new(0, radius) })
@@ -97,8 +106,8 @@ local function buildRow(input: PromptInput, order: number): TextButton
 		corner(7),
 		create("TextLabel", {
 			Name = "Key",
-			Size = UDim2.fromOffset(38, 22),
-			Position = UDim2.fromOffset(6, 5),
+			Size = UDim2.fromOffset(34, 24),
+			Position = UDim2.fromOffset(6, 6),
 			BackgroundColor3 = OUTLINE,
 			BorderSizePixel = 0,
 			Font = Enum.Font.GothamBold,
@@ -106,13 +115,21 @@ local function buildRow(input: PromptInput, order: number): TextButton
 			TextColor3 = SNOW,
 			Text = badgeText(prompt, input.inputType),
 		}, { corner(6) }),
+		create("ImageLabel", {
+			Name = "Icon",
+			Size = UDim2.fromOffset(26, 26),
+			Position = UDim2.fromOffset(46, 5),
+			BackgroundTransparency = 1,
+			Image = ICON_BY_PROMPT[prompt.Name],
+			ScaleType = Enum.ScaleType.Fit,
+		}),
 		create("TextLabel", {
 			Name = "Action",
-			Size = UDim2.new(1, -54, 1, 0),
-			Position = UDim2.fromOffset(50, 0),
+			Size = UDim2.new(1, -84, 1, 0),
+			Position = UDim2.fromOffset(80, 0),
 			BackgroundTransparency = 1,
 			Font = Enum.Font.GothamMedium,
-			TextSize = 14,
+			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = SNOW,
 			Text = prompt.ActionText,

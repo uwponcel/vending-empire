@@ -15,6 +15,7 @@ local create = require(script.Parent.Parent.UI.create)
 local ShopController = require(script.Parent.ShopController)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Icons = require(Shared.Config.Icons)
 local Format = require(Shared.Lib.Format)
 local Remotes = require(Shared.Net.Remotes)
 
@@ -92,7 +93,11 @@ local function applySnapshot(payload: Remotes.Snapshot): ()
 	previousCoins = payload.coins
 
 	if amountLabel then
-		amountLabel.Text = Format.comma(payload.coins)
+		-- Preserve exact small balances, then switch before comma formatting outgrows the
+		-- icon-narrowed label. Shop affordability still uses the exact snapshot value.
+		amountLabel.Text = if payload.coins >= 1_000_000
+			then Format.short(payload.coins)
+			else Format.comma(payload.coins)
 	end
 
 	if previous ~= nil and payload.coins > previous then
@@ -116,12 +121,12 @@ local function build(): ()
 
 	local label = create("TextLabel", {
 		Name = "Amount",
-		Size = UDim2.new(1, -20, 0, 26),
-		Position = UDim2.fromOffset(10, 20),
+		Size = UDim2.new(1, -58, 0, 26),
+		Position = UDim2.fromOffset(48, 20),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
 		TextSize = 22,
-		TextXAlignment = Enum.TextXAlignment.Right,
+		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COIN,
 		Text = "0",
 	}) :: TextLabel
@@ -139,14 +144,22 @@ local function build(): ()
 	}, {
 		corner(10),
 		scale,
+		create("ImageLabel", {
+			Name = "Icon",
+			Size = UDim2.fromOffset(32, 32),
+			Position = UDim2.fromOffset(10, 10),
+			BackgroundTransparency = 1,
+			Image = Icons.currency,
+			ScaleType = Enum.ScaleType.Fit,
+		}),
 		create("TextLabel", {
 			Name = "Caption",
-			Size = UDim2.new(1, -20, 0, 16),
-			Position = UDim2.fromOffset(10, 6),
+			Size = UDim2.new(1, -58, 0, 16),
+			Position = UDim2.fromOffset(48, 6),
 			BackgroundTransparency = 1,
 			Font = Enum.Font.GothamMedium,
 			TextSize = 10,
-			TextXAlignment = Enum.TextXAlignment.Right,
+			TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = MUTED,
 			Text = "COINS",
 		}),
