@@ -17,10 +17,12 @@ local harness = require("./harness")
 
 require("./suites/version.spec")
 require("./suites/format.spec")
+require("./suites/result.spec")
 require("./suites/accrual.spec")
 require("./suites/upgradecurve.spec")
 require("./suites/machines.spec")
 require("./suites/plotlayout.spec")
+require("./suites/plotstate.spec")
 require("./suites/profileschema.spec")
 
 harness.finish()

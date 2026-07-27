@@ -87,11 +87,21 @@ local function buildSign(plotIndex: number): Part
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Label"
 	--[[
-		Sized in studs, so a BillboardGui grows as you approach it. At 10 studs wide the
-		label swallowed a quarter of the screen when walking past a neighbouring plot.
-		5 studs stays readable across the map while staying out of the way up close.
+		SIZED IN PIXELS, NOT STUDS, so it occupies the same amount of screen at any distance.
+
+		Stud sizing was tried twice and is wrong for this label both ways. At 10 studs it
+		swallowed a quarter of the screen when walking past a neighbouring plot; at 5 studs it
+		still filled the bottom third when the camera sat a few studs behind a sign, which is
+		exactly where it sits when a player stands on the plot in front of that one. Shrinking
+		it far enough to survive that made it unreadable from across the map, which defeats the
+		point of a sign.
+
+		Distance falloff is the wrong behaviour for an identity label that is meant to be read
+		from anywhere. There are only ever twelve of these, so a constant screen size cannot
+		add up to clutter. Machine labels keep stud sizing on purpose: there can be 144 of
+		those, and their falloff is what stops a neighbour's plot becoming a wall of text.
 	]]
-	billboard.Size = UDim2.fromScale(5, 1.25)
+	billboard.Size = UDim2.fromOffset(190, 48)
 	billboard.StudsOffsetWorldSpace = Vector3.new(0, 3.5, 0)
 	billboard.AlwaysOnTop = false
 	--[[

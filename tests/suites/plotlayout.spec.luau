@@ -151,6 +151,36 @@ describe("PlotLayout.slotPosition", function()
 		local b = PlotLayout.slotPosition(1, 2, Plots)
 		expect(math.abs(b.x - a.x)).toBeCloseTo(Plots.slotSpacing, 1e-9)
 	end)
+
+	it("fills from the row nearest the spawn outward", function()
+		--[[
+			Slots are handed out lowest-first, so slot order is walking order. If the rows ran
+			the other way, a new player's first machine would appear at the far edge of the
+			plot with every empty slot between them and it.
+
+			None of the other tests here catch this: the grid is symmetric, so reversing the
+			rows leaves every centring, containment and spacing assertion passing. It took a
+			screenshot to notice, which is what this test is here to replace.
+		]]
+		local spawn = PlotLayout.spawnPosition(1, Plots)
+
+		local function distanceFromSpawn(slot: number): number
+			local position = PlotLayout.slotPosition(1, slot, Plots)
+			return math.sqrt((spawn.x - position.x) ^ 2 + (spawn.z - position.z) ^ 2)
+		end
+
+		local frontRow = distanceFromSpawn(1)
+		local backRow = distanceFromSpawn(PlotLayout.slotCount(Plots))
+		expect(frontRow).toBeLessThan(backRow)
+
+		-- Row by row, not slot by slot: within one row the far columns are further away than
+		-- the near ones, so only the row-to-row trend is monotonic.
+		for row = 1, Plots.slotRows - 1 do
+			local nearer = distanceFromSpawn((row - 1) * Plots.slotColumns + 1)
+			local further = distanceFromSpawn(row * Plots.slotColumns + 1)
+			expect(nearer).toBeLessThan(further)
+		end
+	end)
 end)
 
 describe("PlotLayout.spawnPosition", function()

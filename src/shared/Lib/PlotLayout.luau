@@ -85,7 +85,19 @@ function PlotLayout.plotCenter(plotIndex: number, config: Config): Position
 	}
 end
 
---- Slot offset relative to its plot centre, so slot layout is independent of plot index.
+--[[
+	Slot offset relative to its plot centre, so slot layout is independent of plot index.
+
+	ROW ORDER IS NEGATED, AND THAT IS THE POINT. Slots are handed out lowest-first, so slot 1
+	has to be the one nearest where the player stands. Spawns sit at `+spawnForwardOffset` on
+	z, which makes +z the front of a plot, so row 1 has to be at +z and the rows must march
+	away from the player rather than toward them.
+
+	Without the negation the first machine a new player buys appears at the far edge of their
+	plot, 36 studs away on the current config, with eleven empty slots between them and it.
+	Every symmetry test still passed, because the grid is symmetric either way. It took a
+	screenshot to see it.
+]]
 function PlotLayout.slotOffset(slotIndex: number, config: Config): Position
 	assertSlotIndex(slotIndex, config)
 	local column, row = gridCell(slotIndex, config.slotColumns)
@@ -93,7 +105,7 @@ function PlotLayout.slotOffset(slotIndex: number, config: Config): Position
 	return {
 		x = centredOffset(column, config.slotColumns, config.slotSpacing),
 		y = 0,
-		z = centredOffset(row, config.slotRows, config.slotSpacing),
+		z = -centredOffset(row, config.slotRows, config.slotSpacing),
 	}
 end
 

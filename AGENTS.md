@@ -117,10 +117,25 @@ If a Lune suite suddenly fails to require a shared module, a Roblox API call lea
 
 - The client renders and sends intent. It never sends an amount and never computes balance.
 - Every currency mutation goes through the single `EconomyService` entry point, which logs.
-- Collect remotes carry a machine id only. The server recomputes the amount from scratch.
-- Placement remotes carry a slot id only. The server derives the final `CFrame` from the
-  slot anchor.
-- Validate on every remote: ownership, distance, cooldown, rate limit.
+- Placement remotes carry a slot id and a type id only. The server derives the price from
+  config and the final position from the slot anchor.
+- Validate on every remote: ownership, distance, cooldown, rate limit. `Net/Router` does all
+  four before a service sees the request, and re-checks every payload field's type, because a
+  remote argument arrives as whatever the client chose to send.
+- Rejection reasons cross the wire as stable codes, never sentences. Wording lives on the
+  client so it can change without a server deploy.
+
+**Collect has no remote.** It runs off `ProximityPromptService.PromptTriggered`, which the
+engine raises on the server with the triggering player and no payload, so the most repeated
+action in the game has nothing to forge. The prompt's `MaxActivationDistance` is a client-side
+convenience, not the check: `MachineService` re-measures distance and enforces a per-machine
+cooldown server-side.
+
+That server-side distance check could not be driven from a `LocalScript`. Forcing
+`prompt:InputHoldBegin()` from 313 studs does not reach the server even after raising the
+local `MaxActivationDistance`, so the engine filters out-of-range activation before relaying
+it. The check stays as defence against a client that sends the raw activation, but its reject
+path is unverified rather than proven.
 
 ### Accrual
 
@@ -134,6 +149,30 @@ pending = math.min(capacity, ratePerSecond * (os.time() - lastCollectAt))
 Use `os.time()` and never `tick()` or `os.clock()`, because those do not survive a rejoin.
 This is also what makes offline earnings work with no separate system, and the `capacity`
 clamp is what stops offline accrual from being an exploit.
+
+The no-tick rule reaches all the way to the display. A machine model carries `Rate`,
+`Capacity` and `LastCollectAt` as replicated attributes, written only when one of them
+actually changes, and `MachineDisplayController` computes the counter locally from them. A
+filling machine costs the server nothing and sends no traffic between collects.
+
+### Runtime-created instances in ReplicatedStorage race a joining client
+
+Remotes are declared in `default.project.json`, not created with `Instance.new` at boot.
+
+The first version created them at server boot. Measured in a live session: the server held all
+three, and the client had `BuyMachine` and `Notice` but **not** `Sync`, so the shop silently
+never received a snapshot. Re-parenting `Sync` on the server made it appear on the client
+immediately, which rules out the instance being wrong and leaves its initial replication never
+arriving.
+
+A client's first snapshot of `ReplicatedStorage` is taken as it joins, and a server still
+populating a folder at that moment is racing it. In a Studio play session the local player
+joins as the server boots, so the race is close to guaranteed there. Declaring the instances
+puts them in the place file, inside the initial snapshot, with no window to race.
+
+The cost is accepted: adding a remote now needs a `rojo serve` restart. `Remotes.verify()`
+runs at boot and errors naming any remote that is in the name table but not the manifest,
+because creating a missing one as a fallback would silently reintroduce the race.
 
 ### Typing rules learned the hard way
 
@@ -151,6 +190,13 @@ These all come from real errors the analyzer found:
   not an implicit `any`.
 - Prefer a vendored module's exported generic type over `typeof(someCall(...))`. The latter
   is arity-checked and breaks on incomplete upstream annotations.
+- Generalized iteration over a table type whose fields are **named** yields `unknown` values,
+  even with the table explicitly annotated. `for _, name in Remotes.names do` cannot then
+  assign `name` to a string field. List the entries out, or give the type an indexer and
+  accept losing per-field typo checking.
+- A variable reassigned inside the loop that tests it stays optional afterwards. Wrap the wait
+  in a function that returns the value, so the caller's `if x == nil then return end` narrows
+  it, instead of casting at every use.
 
 ### Style
 
@@ -242,6 +288,32 @@ World settings that must not drift live in `default.project.json`, not in Studio
 Pad colour is a functional requirement, not decoration. The first pass used a mid grey that
 matched the baseplate's value, making plots invisible from any distance no matter what the
 haze was doing.
+
+### Slot order is walking order
+
+Slots are handed out lowest-first, so slot 1 has to be the slot nearest the spawn. Spawns sit
+at `+spawnForwardOffset` on z, which makes `+z` the front of a plot, so `PlotLayout.slotOffset`
+negates its row offset and the rows march away from the player.
+
+Without that negation a new player's first machine appeared at the far edge of their plot, 36
+studs away, with eleven empty slots between them and it. **Every layout test still passed**,
+because the grid is symmetric under a row flip and every assertion was about centring,
+containment or spacing. Only a screenshot showed it. There is now a test for the ordering
+itself, and it fails if the negation is removed.
+
+### BillboardGui: pixels for identity, studs for detail
+
+A stud-sized BillboardGui grows as you approach it, and there is no minimum-distance property
+to stop it. Which sizing is right depends on what the label is for:
+
+- **Plot signs are pixel-sized** (`UDim2.fromOffset`). They are identity labels meant to be
+  read from anywhere, so constant screen size is the goal and there are only twelve. Stud
+  sizing was tried at 10 and at 5 studs; both filled a third of the screen when the camera sat
+  a few studs behind a sign, which is exactly where it sits for a player on the plot in front.
+  Shrinking it enough to survive that made it unreadable across the map.
+- **Machine labels stay stud-sized.** There can be 144 of them, and the distance falloff is
+  what stops a neighbour's plot becoming a wall of text. Nobody needs to read a stranger's
+  pending count.
 
 ## DataStores
 

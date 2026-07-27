@@ -7,6 +7,18 @@
       "$className": "ReplicatedStorage",
       "Shared": {
         "$path": "src/shared"
+      },
+      "Remotes": {
+        "$className": "Folder",
+        "BuyMachine": {
+          "$className": "RemoteEvent"
+        },
+        "Sync": {
+          "$className": "RemoteEvent"
+        },
+        "Notice": {
+          "$className": "RemoteEvent"
+        }
       }
     },
 
