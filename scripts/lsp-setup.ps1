@@ -68,8 +68,9 @@ if ($SkipDownload -and (Test-Path $definitions)) {
 else {
     $url = "https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/$luauLspVersion/scripts/globalTypes.None.d.luau"
     Write-Host "Downloading Roblox definitions from $url"
-    & curl.exe -fsSL -o $definitions $url
-    if ($LASTEXITCODE -ne 0) { Write-Error "Download failed with exit code $LASTEXITCODE" }
+    # Invoke-WebRequest rather than curl.exe: this script runs on Windows locally and on
+    # Linux in CI, and `curl.exe` only exists on the former. CI caught that.
+    Invoke-WebRequest -Uri $url -OutFile $definitions -MaximumRedirection 5
 }
 Write-Host "  globalTypes.None.d.luau  $((Get-Item $definitions).Length) bytes"
 
