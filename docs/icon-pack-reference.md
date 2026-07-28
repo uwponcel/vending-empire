@@ -26,9 +26,15 @@ the model into Studio.
 | Shop | 12 | `rbxassetid://92353483125582` | Shop button and panel title |
 | Currency / collect | 69 | `rbxassetid://113631549631728` | Coin HUD and collect action |
 | Upgrade | 99 | `rbxassetid://99044944223614` | Machine upgrade action |
-| Buy | 62 | `rbxassetid://77216298800748` | Machine purchase buttons |
-| Error | 19 | `rbxassetid://105424546466549` | Rejection and error states |
+| Money | 62 | `rbxassetid://77216298800748` | Coin bank, buy buttons, collect prompt, floating gain |
+| Close | 19 | `rbxassetid://105424546466549` | Shop panel close button |
+| Error | 6 | `rbxassetid://114895557904611` | Rejection and error states |
 | Success | 30 | `rbxassetid://113242667524418` | Successful action states |
+
+One glyph per concept. Money used to be two icons, a cash stack on buy buttons and a money bag
+on the coin bank, which asked a player to learn that both meant coins. Error used to be catalog
+19, the close X, so a rejection toast was fronted by a dismiss glyph while the close button that
+actually wanted it had a text "X" instead.
 
 ## Full Premium Catalog
 

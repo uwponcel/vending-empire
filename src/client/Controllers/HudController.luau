@@ -8,11 +8,11 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
 local create = require(script.Parent.Parent.UI.create)
 local FloatingGain = require(script.Parent.Parent.UI.FloatingGain)
+local Sfx = require(script.Parent.Parent.UI.Sfx)
 local ShopController = require(script.Parent.ShopController)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -28,7 +28,6 @@ local HudController = {}
 
 local amountLabel: TextLabel? = nil
 local amountScale: UIScale? = nil
-local collectSound: Sound? = nil
 local previousCoins: number? = nil
 
 local function corner(radius: number): Instance
@@ -36,12 +35,7 @@ local function corner(radius: number): Instance
 end
 
 local function showGain(amount: number): ()
-	local sound = collectSound
-	if sound == nil then
-		return
-	end
-
-	sound:Play()
+	Sfx.play("collect")
 
 	--[[
 		The gain erupts off the character, not out of the HUD corner. The bank in the corner
@@ -169,13 +163,6 @@ local function build(): ()
 		label,
 	})
 	counter.Parent = root
-
-	local sound = Instance.new("Sound")
-	sound.Name = "Collect"
-	sound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-	sound.Volume = 0.35
-	sound.Parent = SoundService
-	collectSound = sound
 end
 
 function HudController.start(): ()

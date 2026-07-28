@@ -20,7 +20,16 @@ local Icons = {
 	]]
 	money = "rbxassetid://77216298800748",
 	upgrade = "rbxassetid://99044944223614",
-	error = "rbxassetid://105424546466549",
+	--- Catalog 19, the pack's own close X. Replaces a text "X" on the shop's close button.
+	close = "rbxassetid://105424546466549",
+	--[[
+		Catalog 6, a warning triangle.
+
+		This was the close X (catalog 19), which meant a rejection toast reading "Not enough coins"
+		was fronted by a dismiss glyph. Same picture, wrong meaning, and it collided with the close
+		button's actual need for that glyph.
+	]]
+	error = "rbxassetid://114895557904611",
 	success = "rbxassetid://113242667524418",
 }
 

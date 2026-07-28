@@ -14,6 +14,7 @@ local TweenService = game:GetService("TweenService")
 local create = require(script.Parent.Parent.UI.create)
 local MachineThumbnail = require(script.Parent.Parent.UI.MachineThumbnail)
 local MenuButton = require(script.Parent.Parent.UI.MenuButton)
+local Sfx = require(script.Parent.Parent.UI.Sfx)
 local Sunburst = require(script.Parent.Parent.UI.Sunburst)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -489,32 +490,20 @@ local function buildPanel(onClose: () -> ()): Frame
 		shut is not discoverable once the panel has covered the launcher's corner of the eye.
 	]]
 	--[[
-		The glyph is a child label filling the button, not the button's own Text.
+		The pack's own close glyph, not a letter X.
 
-		A TextButton renders its own text against its content box, which its border stroke and
-		corner radius both participate in, and the X ended up sitting high and left of the circle's
-		true centre. A child label that fills the button centres against the button's full box
-		instead, which is the same box the circle is drawn in.
+		This was a text "X", which needed a one pixel nudge to look centred: Roblox centres a
+		label's line box, and that box reserves descender space a capital X never uses, so the ink
+		rode high. An image has no baseline, so it centres on geometry and the nudge is gone.
 	]]
-	local closeGlyph = create("TextLabel", {
+	local closeGlyph = create("ImageLabel", {
 		Name = "Glyph",
-		Size = UDim2.fromScale(1, 1),
-		--[[
-			One pixel down, because Roblox centres the line box rather than the ink.
-
-			Measured: a 30px label holding "X" at TextSize 15 reports TextBounds of 6.7 by 14.7 and
-			so is centred with 7.7px of slack above and below. That 14.7 includes the descender
-			space the font reserves, which a capital X does not use, so the visible glyph sits
-			high inside its own box by about half a descender.
-		]]
-		Position = UDim2.fromOffset(0, 1),
+		Size = UDim2.fromScale(0.55, 0.55),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBlack,
-		TextSize = 19,
-		TextColor3 = SNOW,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Center,
-		Text = "X",
+		Image = Icons.close,
+		ScaleType = Enum.ScaleType.Fit,
 	})
 
 	local close = create("TextButton", {
@@ -673,6 +662,19 @@ function ShopController.start(): ()
 	build()
 
 	Remotes.get(Remotes.names.sync).OnClientEvent:Connect(function(payload: Remotes.Snapshot)
+		--[[
+			A machine appearing in the snapshot is the server confirming a purchase, which is the
+			only moment worth a sound. Driven off the authoritative snapshot rather than the button
+			press, so a rejected buy stays silent and a granted one is never missed.
+
+			Guarded on a previous snapshot existing, because the first one after joining carries
+			every machine the player already owns and must not fire on a rebuild.
+		]]
+		local previous = snapshot
+		if previous ~= nil and #payload.machines > #previous.machines then
+			Sfx.play("purchase")
+		end
+
 		snapshot = payload
 		refresh()
 	end)
