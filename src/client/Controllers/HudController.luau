@@ -99,14 +99,20 @@ local function build(): ()
 
 	local label = create("TextLabel", {
 		Name = "Amount",
-		Size = UDim2.new(1, -58, 0, 26),
-		Position = UDim2.fromOffset(48, 20),
+		Size = UDim2.new(1, -74, 0, 34),
+		Position = UDim2.fromOffset(62, 24),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		TextSize = 22,
+		Font = Enum.Font.GothamBlack,
+		TextSize = 28,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COIN,
 		Text = "0",
+	}, {
+		create("UIStroke", {
+			Thickness = 2,
+			Color = Color3.fromRGB(30, 34, 44),
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		}),
 	}) :: TextLabel
 	amountLabel = label
 
@@ -119,7 +125,7 @@ local function build(): ()
 	]]
 	local counter = create("Frame", {
 		Name = "Coins",
-		Size = UDim2.fromOffset(190, 52),
+		Size = UDim2.fromOffset(248, 68),
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -16, 1, -16),
 		BackgroundColor3 = INK,
@@ -127,17 +133,17 @@ local function build(): ()
 		BorderSizePixel = 0,
 		Parent = root,
 	}, {
-		corner(10),
+		corner(14),
 		scale,
 		create("UIStroke", {
-			Thickness = 3,
+			Thickness = 4,
 			Color = Color3.fromRGB(30, 34, 44),
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		}),
 		create("ImageLabel", {
 			Name = "Icon",
-			Size = UDim2.fromOffset(32, 32),
-			Position = UDim2.fromOffset(10, 10),
+			Size = UDim2.fromOffset(42, 42),
+			Position = UDim2.fromOffset(12, 13),
 			BackgroundTransparency = 1,
 			Image = Icons.money,
 			ScaleType = Enum.ScaleType.Fit,
@@ -145,11 +151,11 @@ local function build(): ()
 		-- Uppercase black with an outline, the same voice as every other label in the interface.
 		create("TextLabel", {
 			Name = "Caption",
-			Size = UDim2.new(1, -58, 0, 16),
-			Position = UDim2.fromOffset(48, 5),
+			Size = UDim2.new(1, -74, 0, 20),
+			Position = UDim2.fromOffset(62, 6),
 			BackgroundTransparency = 1,
 			Font = Enum.Font.GothamBlack,
-			TextSize = 11,
+			TextSize = 14,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = MUTED,
 			Text = "COINS",

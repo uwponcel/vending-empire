@@ -86,22 +86,37 @@ local OUTLINE = Color3.fromRGB(24, 27, 35)
 local PRICE_GREEN = Color3.fromRGB(88, 176, 96)
 local LOCKED_GREY = Color3.fromRGB(88, 95, 112)
 
-local CARD_WIDTH = 150
-local CARD_HEIGHT = 202
-local CARD_GAP = 10
+--[[
+	Card geometry. Everything else in the panel is derived from these, so the shop scales by
+	editing them rather than by hunting offsets.
+
+	The launcher button is deliberately NOT tied to this. It is sized for a thumb and already reads
+	at a glance, so it stays where it is while the panel grows.
+]]
+local CARD_WIDTH = 200
+local CARD_HEIGHT = 270
+local CARD_GAP = 12
 
 --- Artwork band inside a card. The sunburst centres on this, not on the card.
-local ART_TOP = 44
-local ART_HEIGHT = 92
+local ART_TOP = 58
+local ART_HEIGHT = 124
 --[[
 	Must not exceed the card's narrow dimension, and must fit around its centre. Sunburst rays are
 	bounded by their container rather than clipped, because Roblox will not clip a rotated child,
 	so an oversized value here puts rays outside the card with nothing to stop them.
-]]
-local SUNBURST_DIAMETER = 140
 
+	At 186 across a 200 wide card centred on the artwork band, the burst clears every edge by at
+	least 7 pixels.
+]]
+local SUNBURST_DIAMETER = 186
+
+--- Header row height, which the title, the shop icon, and the close button all centre within.
+local HEADER_HEIGHT = 40
+local TAB_HEIGHT = 42
 --- Close button diameter. Sized to sit inside the header row beside the title, not to shout.
-local CLOSE_SIZE = 30
+local CLOSE_SIZE = 38
+--- Distance from the panel's top to the card grid: header, tabs, and the gaps around them.
+local GRID_TOP = 118
 
 local TOAST_SECONDS = 2.5
 
@@ -228,11 +243,11 @@ local function buildCard(config: Machines.Machine): TextButton
 
 	local title = create("TextLabel", {
 		Name = "Title",
-		Size = UDim2.new(1, -16, 0, 34),
-		Position = UDim2.fromOffset(8, 8),
+		Size = UDim2.new(1, -20, 0, 44),
+		Position = UDim2.fromOffset(10, 10),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBlack,
-		TextSize = 14,
+		TextSize = 18,
 		TextWrapped = true,
 		TextColor3 = SNOW,
 		Text = config.displayName,
@@ -259,8 +274,8 @@ local function buildCard(config: Machines.Machine): TextButton
 			ScaleType = Enum.ScaleType.Fit,
 		})
 	local artFrame = art :: GuiObject
-	artFrame.Size = UDim2.new(1, -20, 0, ART_HEIGHT)
-	artFrame.Position = UDim2.fromOffset(10, ART_TOP)
+	artFrame.Size = UDim2.new(1, -26, 0, ART_HEIGHT)
+	artFrame.Position = UDim2.fromOffset(13, ART_TOP)
 
 	--[[
 		Rate and capacity are the numbers a player actually compares between two machines, so they
@@ -271,11 +286,11 @@ local function buildCard(config: Machines.Machine): TextButton
 	]]
 	local detail = create("TextLabel", {
 		Name = "Detail",
-		Size = UDim2.new(1, -16, 0, 18),
-		Position = UDim2.fromOffset(8, 136),
+		Size = UDim2.new(1, -20, 0, 22),
+		Position = UDim2.fromOffset(10, ART_TOP + ART_HEIGHT + 4),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBlack,
-		TextSize = 13,
+		TextSize = 15,
 		TextColor3 = SNOW,
 		Text = "",
 	}, {
@@ -288,8 +303,8 @@ local function buildCard(config: Machines.Machine): TextButton
 
 	local pillIcon = create("ImageLabel", {
 		Name = "Icon",
-		Size = UDim2.fromOffset(22, 22),
-		Position = UDim2.new(0, 8, 0.5, -11),
+		Size = UDim2.fromOffset(28, 28),
+		Position = UDim2.new(0, 10, 0.5, -14),
 		BackgroundTransparency = 1,
 		Image = Icons.money,
 		ScaleType = Enum.ScaleType.Fit,
@@ -297,11 +312,11 @@ local function buildCard(config: Machines.Machine): TextButton
 
 	local price = create("TextLabel", {
 		Name = "Price",
-		Size = UDim2.new(1, -34, 1, 0),
-		Position = UDim2.fromOffset(32, 0),
+		Size = UDim2.new(1, -44, 1, 0),
+		Position = UDim2.fromOffset(42, 0),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBlack,
-		TextSize = 14,
+		TextSize = 18,
 		TextColor3 = SNOW,
 		Text = `Buy {Format.short(config.cost)}`,
 	}, {
@@ -314,11 +329,11 @@ local function buildCard(config: Machines.Machine): TextButton
 
 	local pill = create("Frame", {
 		Name = "Pill",
-		Size = UDim2.new(1, -20, 0, 36),
-		Position = UDim2.new(0, 10, 1, -46),
+		Size = UDim2.new(1, -26, 0, 46),
+		Position = UDim2.new(0, 13, 1, -58),
 		BackgroundColor3 = PRICE_GREEN,
 		BorderSizePixel = 0,
-	}, { corner(10), outline(2), pillIcon, price }) :: Frame
+	}, { corner(12), outline(3), pillIcon, price }) :: Frame
 
 	local scale = create("UIScale", { Scale = 1 }) :: UIScale
 
@@ -332,7 +347,7 @@ local function buildCard(config: Machines.Machine): TextButton
 		LayoutOrder = config.tier,
 		Visible = config.category == activeCategory,
 	}, {
-		corner(14),
+		corner(18),
 		outline(3),
 		scale,
 		-- Sunburst first, so everything else draws over it. Centred on the artwork band so the
@@ -381,8 +396,8 @@ end
 
 local function buildTabs(): Frame
 	local bar = create("Frame", {
-		Size = UDim2.new(1, -28, 0, 34),
-		Position = UDim2.fromOffset(14, 48),
+		Size = UDim2.new(1, -32, 0, TAB_HEIGHT),
+		Position = UDim2.fromOffset(16, HEADER_HEIGHT + 20),
 		BackgroundTransparency = 1,
 	}) :: Frame
 
@@ -401,12 +416,12 @@ local function buildTabs(): Frame
 			BackgroundColor3 = SURFACE,
 			BorderSizePixel = 0,
 			Font = Enum.Font.GothamBlack,
-			TextSize = 14,
+			TextSize = 17,
 			TextColor3 = QUIET_TEXT,
 			Text = CATEGORY_LABEL[category],
 			LayoutOrder = order,
 			AutoButtonColor = true,
-		}, { corner(9), outline(2) }) :: TextButton
+		}, { corner(11), outline(2) }) :: TextButton
 
 		tab.Activated:Connect(function()
 			selectCategory(category)
@@ -436,7 +451,7 @@ local function buildPanel(onClose: () -> ()): Frame
 	local grid = create("Frame", {
 		Name = "Cards",
 		Size = UDim2.fromOffset(CARD_WIDTH * 3 + CARD_GAP * 2, CARD_HEIGHT),
-		Position = UDim2.fromOffset(14, 88),
+		Position = UDim2.fromOffset(16, GRID_TOP),
 		BackgroundTransparency = 1,
 	}, {
 		create("UIListLayout", {
@@ -451,11 +466,11 @@ local function buildPanel(onClose: () -> ()): Frame
 	end
 
 	local title = create("TextLabel", {
-		Size = UDim2.new(1, -110, 0, 32),
-		Position = UDim2.fromOffset(52, 10),
+		Size = UDim2.new(1, -130, 0, HEADER_HEIGHT),
+		Position = UDim2.fromOffset(66, 14),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBlack,
-		TextSize = 22,
+		TextSize = 28,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = SNOW,
 		Text = "MACHINE SHOP",
@@ -495,7 +510,7 @@ local function buildPanel(onClose: () -> ()): Frame
 		Position = UDim2.fromOffset(0, 1),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBlack,
-		TextSize = 15,
+		TextSize = 19,
 		TextColor3 = SNOW,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextYAlignment = Enum.TextYAlignment.Center,
@@ -506,7 +521,7 @@ local function buildPanel(onClose: () -> ()): Frame
 		Name = "Close",
 		Size = UDim2.fromOffset(CLOSE_SIZE, CLOSE_SIZE),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 10),
+		Position = UDim2.new(1, -16, 0, 15),
 		BackgroundColor3 = RED,
 		BorderSizePixel = 0,
 		Text = "",
@@ -521,7 +536,7 @@ local function buildPanel(onClose: () -> ()): Frame
 
 	local panel = create("Frame", {
 		Name = "ShopPanel",
-		Size = UDim2.fromOffset(CARD_WIDTH * 3 + CARD_GAP * 2 + 28, CARD_HEIGHT + 102),
+		Size = UDim2.fromOffset(CARD_WIDTH * 3 + CARD_GAP * 2 + 32, GRID_TOP + CARD_HEIGHT + 16),
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 16, 1, -104),
 		BackgroundColor3 = INK,
@@ -529,12 +544,12 @@ local function buildPanel(onClose: () -> ()): Frame
 		BorderSizePixel = 0,
 		Visible = false,
 	}, {
-		corner(16),
+		corner(20),
 		outline(3),
 		create("ImageLabel", {
 			Name = "ShopIcon",
-			Size = UDim2.fromOffset(32, 32),
-			Position = UDim2.fromOffset(14, 10),
+			Size = UDim2.fromOffset(HEADER_HEIGHT, HEADER_HEIGHT),
+			Position = UDim2.fromOffset(16, 14),
 			BackgroundTransparency = 1,
 			Image = Icons.shop,
 			ScaleType = Enum.ScaleType.Fit,
