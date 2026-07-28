@@ -51,6 +51,8 @@ local CATEGORY_COLOR: { [Machines.Category]: Color3 } = {
 local PANEL_COLOR = Color3.fromRGB(46, 52, 64)
 local TEXT_COLOR = Color3.fromRGB(236, 239, 244)
 local READY_COLOR = Color3.fromRGB(163, 190, 140)
+--- The dark outline every label in the interface wears, screen or world.
+local LABEL_OUTLINE = Color3.fromRGB(24, 27, 35)
 
 local MachineModel = {}
 
@@ -147,7 +149,7 @@ function MachineModel.applyState(
 	local billboard = body and body:FindFirstChild("Label")
 	local name = billboard and billboard:FindFirstChild("MachineName")
 	if name and name:IsA("TextLabel") then
-		name.Text = `{config.displayName} · Lv. {level}`
+		name.Text = string.upper(`{config.displayName} · Lv. {level}`)
 	end
 end
 
@@ -261,34 +263,61 @@ end
 local function buildLabel(spec: Spec, body: Part): BillboardGui
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Label"
-	-- Studs, so it scales with distance like the plot signs. Sized against a 5 stud body.
-	billboard.Size = UDim2.fromScale(6, 2)
-	billboard.StudsOffsetWorldSpace = Vector3.new(0, BODY_SIZE.Y / 2 + 2, 0)
+	--[[
+		Studs, so it scales with distance. That is the right choice here and not for the plot
+		signs: there can be 144 of these, and the falloff is what stops a neighbour's plot
+		becoming a wall of text. Sized against a 5 stud body.
+	]]
+	billboard.Size = UDim2.fromScale(7.5, 2.5)
+	billboard.StudsOffsetWorldSpace = Vector3.new(0, BODY_SIZE.Y / 2 + 2.2, 0)
 	billboard.AlwaysOnTop = false
-	--- Shorter than the plot signs on purpose: a neighbour's machine labels are noise.
-	billboard.MaxDistance = 120
+	--[[
+		Short, and it has to be short now that the labels are large.
+
+		Twelve machines in a 4 by 3 grid stack vertically on screen, so at 120 studs every label
+		on the plot was drawn at once and the enlarged text collided three deep. Reading a
+		neighbour's stock level was never the point; reading the machine you are standing at is.
+		At 45 the labels drop away roughly a row behind the player, which is what keeps the ones
+		that matter legible.
+
+		The plot signs stay long-range on purpose. Those are the cross-map comparison.
+	]]
+	billboard.MaxDistance = 45
 	billboard.Parent = body
 
+	--[[
+		THE LEGACY TEXT STROKE, NOT A UIStroke, AND THAT IS DELIBERATE.
+
+		Both of these are `TextScaled` inside a stud-sized billboard, so their glyphs shrink as
+		the player walks away. `UIStroke.Thickness` is a fixed pixel count and would not shrink
+		with them, so a stroke tuned to look right up close swallows the text at distance. The
+		legacy stroke is drawn as part of the glyph and scales with it.
+
+		The screen UI is the opposite case and uses UIStroke, because those labels are a constant
+		pixel size. See the BillboardGui note in CLAUDE.md.
+	]]
 	local name = Instance.new("TextLabel")
 	name.Name = "MachineName"
-	name.Size = UDim2.fromScale(1, 0.45)
+	name.Size = UDim2.fromScale(1, 0.44)
 	name.BackgroundTransparency = 1
-	name.Font = Enum.Font.GothamMedium
+	name.Font = Enum.Font.GothamBlack
 	name.TextScaled = true
 	name.TextColor3 = TEXT_COLOR
-	name.TextStrokeTransparency = 0.4
-	name.Text = `{spec.config.displayName} · Lv. {spec.level}`
+	name.TextStrokeColor3 = LABEL_OUTLINE
+	name.TextStrokeTransparency = 0
+	name.Text = string.upper(`{spec.config.displayName} · Lv. {spec.level}`)
 	name.Parent = billboard
 
 	local pending = Instance.new("TextLabel")
 	pending.Name = "Pending"
-	pending.Size = UDim2.fromScale(1, 0.55)
-	pending.Position = UDim2.fromScale(0, 0.45)
+	pending.Size = UDim2.fromScale(1, 0.56)
+	pending.Position = UDim2.fromScale(0, 0.44)
 	pending.BackgroundTransparency = 1
-	pending.Font = Enum.Font.GothamBold
+	pending.Font = Enum.Font.GothamBlack
 	pending.TextScaled = true
 	pending.TextColor3 = READY_COLOR
-	pending.TextStrokeTransparency = 0.4
+	pending.TextStrokeColor3 = LABEL_OUTLINE
+	pending.TextStrokeTransparency = 0
 	-- Filled in by the client from the model's attributes. The server never writes it, so
 	-- a counter that ticks up costs no traffic.
 	pending.Text = ""

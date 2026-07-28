@@ -16,7 +16,8 @@ local Plots = require(Shared.Config.Plots)
 local PlotLayout = require(Shared.Lib.PlotLayout)
 
 local CONTAINER_NAME = "Plots"
-local UNCLAIMED_LABEL = "Unclaimed"
+--- Uppercase, matching every other title in the game.
+local UNCLAIMED_LABEL = "UNCLAIMED"
 
 --[[
 	Pads are deliberately much darker than the light grey baseplate they sit on.
@@ -29,6 +30,8 @@ local UNCLAIMED_LABEL = "Unclaimed"
 local PAD_COLOR = Color3.fromRGB(52, 58, 72)
 local SLOT_COLOR = Color3.fromRGB(136, 192, 208)
 local SIGN_COLOR = Color3.fromRGB(94, 129, 172)
+--- The dark outline every label in the interface wears, screen or world.
+local SIGN_OUTLINE = Color3.fromRGB(24, 27, 35)
 
 local PlotGeometry = {}
 
@@ -101,7 +104,7 @@ local function buildSign(plotIndex: number): Part
 		add up to clutter. Machine labels keep stud sizing on purpose: there can be 144 of
 		those, and their falloff is what stops a neighbour's plot becoming a wall of text.
 	]]
-	billboard.Size = UDim2.fromOffset(190, 48)
+	billboard.Size = UDim2.fromOffset(260, 62)
 	billboard.StudsOffsetWorldSpace = Vector3.new(0, 3.5, 0)
 	billboard.AlwaysOnTop = false
 	--[[
@@ -117,12 +120,22 @@ local function buildSign(plotIndex: number): Part
 	text.Name = "Owner"
 	text.Size = UDim2.fromScale(1, 1)
 	text.BackgroundTransparency = 1
-	text.Font = Enum.Font.GothamMedium
+	text.Font = Enum.Font.GothamBlack
 	text.TextScaled = true
 	text.TextColor3 = Color3.fromRGB(236, 239, 244)
-	text.TextStrokeTransparency = 0.4
 	text.Text = UNCLAIMED_LABEL
 	text.Parent = billboard
+
+	--[[
+		A real UIStroke here, unlike the machine labels, because this billboard is sized in pixels
+		and so holds one constant glyph size at every distance. A fixed thickness therefore stays
+		correct, and it gives the chunky outline the screen UI uses.
+	]]
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 3
+	stroke.Color = SIGN_OUTLINE
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	stroke.Parent = text
 
 	return post
 end
@@ -204,7 +217,7 @@ function PlotGeometry.setOwnerLabel(plotIndex: number, ownerName: string?): ()
 	local label = billboard and billboard:FindFirstChild("Owner")
 
 	if label and label:IsA("TextLabel") then
-		label.Text = if ownerName then `{ownerName}'s Empire` else UNCLAIMED_LABEL
+		label.Text = if ownerName then string.upper(`{ownerName}'s Empire`) else UNCLAIMED_LABEL
 	end
 end
 
