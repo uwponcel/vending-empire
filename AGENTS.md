@@ -270,6 +270,24 @@ the whole save and load round-trip with no test-only code involved.
 and the plot grid appears only in a play session. That is the cost of keeping layout in
 source control instead of authoring it in Studio.
 
+### A play session started right after an edit runs stale code
+
+Rojo only patches the DataModel while Studio is in **Edit** mode. Saving a file and then starting
+play immediately gives a session running the previous version, and it looks exactly like the
+change not working.
+
+This cost real time twice in one session, including a wrong conclusion about a fix that was
+already correct. Confirm the edit landed before starting play, by reading the script's own source
+out of the Edit datamodel:
+
+```lua
+local source = StarterPlayer.StarterPlayerScripts.Client.UI.Sunburst.Source
+return { rayCount = source:match("RAY_COUNT = (%d+)") }
+```
+
+The same applies in reverse: files edited while a play session is running do not sync into it, and
+stopping play does not always re-apply them.
+
 ### Restarting rojo serve after a manifest change
 
 `rojo serve` reads `default.project.json` once at startup. Editing `$properties` or adding

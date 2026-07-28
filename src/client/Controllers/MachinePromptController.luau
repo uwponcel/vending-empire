@@ -20,13 +20,25 @@ local Icons = require(Shared.Config.Icons)
 
 local INK = Color3.fromRGB(46, 52, 64)
 local SURFACE = Color3.fromRGB(59, 66, 82)
-local OUTLINE = Color3.fromRGB(94, 129, 172)
+--- Frost accent, used for the key badge. Named for what it is: this is not an outline colour.
+local ACCENT = Color3.fromRGB(94, 129, 172)
+--- The dark outline every other surface in the interface wears.
+local OUTLINE = Color3.fromRGB(24, 27, 35)
 local SNOW = Color3.fromRGB(236, 239, 244)
 
-local PANEL_WIDTH = 228
-local ROW_HEIGHT = 36
-local ROW_GAP = 5
-local PANEL_PADDING = 7
+--[[
+	Sized in pixels, so the panel holds the same screen size at any distance. This is the card a
+	player reads while standing at a machine, which is the most repeated read in the game, so it
+	is deliberately large rather than tucked away.
+]]
+local PANEL_WIDTH = 300
+local ROW_HEIGHT = 48
+local ROW_GAP = 7
+local PANEL_PADDING = 9
+
+local KEY_WIDTH = 44
+local KEY_HEIGHT = 34
+local ICON_SIZE = 34
 
 local MachinePromptController = {}
 
@@ -49,6 +61,15 @@ local ICON_BY_PROMPT: { [string]: string } = {
 
 local function corner(radius: number): Instance
 	return create("UICorner", { CornerRadius = UDim.new(0, radius) })
+end
+
+--- Strokes the glyphs, not a border, so text stays legible against whatever is behind the panel.
+local function textOutline(thickness: number): Instance
+	return create("UIStroke", {
+		Thickness = thickness,
+		Color = OUTLINE,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+	})
 end
 
 local function modelFor(prompt: ProximityPrompt): Model?
@@ -103,37 +124,42 @@ local function buildRow(input: PromptInput, order: number): TextButton
 		AutoButtonColor = true,
 		Text = "",
 	}, {
-		corner(7),
+		corner(9),
 		create("TextLabel", {
 			Name = "Key",
-			Size = UDim2.fromOffset(34, 24),
-			Position = UDim2.fromOffset(6, 6),
-			BackgroundColor3 = OUTLINE,
+			Size = UDim2.fromOffset(KEY_WIDTH, KEY_HEIGHT),
+			Position = UDim2.fromOffset(8, (ROW_HEIGHT - KEY_HEIGHT) // 2),
+			BackgroundColor3 = ACCENT,
 			BorderSizePixel = 0,
-			Font = Enum.Font.GothamBold,
-			TextSize = 11,
+			Font = Enum.Font.GothamBlack,
+			TextSize = 15,
 			TextColor3 = SNOW,
 			Text = badgeText(prompt, input.inputType),
-		}, { corner(6) }),
+		}, { corner(7), textOutline(2) }),
 		create("ImageLabel", {
 			Name = "Icon",
-			Size = UDim2.fromOffset(26, 26),
-			Position = UDim2.fromOffset(46, 5),
+			Size = UDim2.fromOffset(ICON_SIZE, ICON_SIZE),
+			Position = UDim2.fromOffset(60, (ROW_HEIGHT - ICON_SIZE) // 2),
 			BackgroundTransparency = 1,
 			Image = ICON_BY_PROMPT[prompt.Name],
 			ScaleType = Enum.ScaleType.Fit,
 		}),
+		--[[
+			Uppercase black with an outline, the same voice as the shop titles, the launcher
+			tooltip, and the coin caption. `ActionText` carries a cost on the upgrade prompt, so
+			this reads "UPGRADE 102".
+		]]
 		create("TextLabel", {
 			Name = "Action",
-			Size = UDim2.new(1, -84, 1, 0),
-			Position = UDim2.fromOffset(80, 0),
+			Size = UDim2.new(1, -116, 1, 0),
+			Position = UDim2.fromOffset(104, 0),
 			BackgroundTransparency = 1,
-			Font = Enum.Font.GothamMedium,
-			TextSize = 13,
+			Font = Enum.Font.GothamBlack,
+			TextSize = 18,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = SNOW,
-			Text = prompt.ActionText,
-		}),
+			Text = string.upper(prompt.ActionText),
+		}, { textOutline(2) }),
 	}) :: TextButton
 
 	button.Activated:Connect(function()
@@ -177,11 +203,12 @@ local function refresh(model: Model): ()
 
 	local height = PANEL_PADDING * 2 + #inputs * ROW_HEIGHT + (#inputs - 1) * ROW_GAP
 	local children: { Instance } = {
-		corner(10),
+		corner(14),
+		-- Border, matching the chunky outline on the shop cards and the launcher.
 		create("UIStroke", {
 			Color = OUTLINE,
-			Transparency = 0.45,
-			Thickness = 1,
+			Thickness = 3,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		}),
 		create("UIListLayout", {
 			Padding = UDim.new(0, ROW_GAP),
